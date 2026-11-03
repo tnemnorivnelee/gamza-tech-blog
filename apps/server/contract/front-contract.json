@@ -1,0 +1,2169 @@
+{
+  "source": "GamzaTechBlog-front src/generated/api (openapi-generator 7.14.0, typescript-fetch)",
+  "operations": [
+    {
+      "operationId": "addComment",
+      "name": "addComment",
+      "method": "POST",
+      "path": "/api/v1/comment/{postId}/comments",
+      "query": [],
+      "bodyModel": "CommentRequest",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoCommentResponse"
+    },
+    {
+      "operationId": "approveUserProfile",
+      "name": "approveUserProfile",
+      "method": "PUT",
+      "path": "/api/admin/users/{id}/approve",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoVoid"
+    },
+    {
+      "operationId": "chat",
+      "name": "chat",
+      "method": "POST",
+      "path": "/api/v1/ai/chat",
+      "query": [],
+      "bodyModel": "ChatMessageRequest",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ChatMessageResponse"
+    },
+    {
+      "operationId": "completeProfile",
+      "name": "completeProfile",
+      "method": "POST",
+      "path": "/api/v1/users/me/complete",
+      "query": [],
+      "bodyModel": "UserProfileRequest",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoUserProfileResponse"
+    },
+    {
+      "operationId": "create",
+      "name": "create",
+      "method": "POST",
+      "path": "/api/admissions/admin",
+      "query": [],
+      "bodyModel": "CreateAdmissionResultRequest",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoLong"
+    },
+    {
+      "operationId": "createIntro",
+      "name": "createIntro",
+      "method": "POST",
+      "path": "/api/v1/intros",
+      "query": [],
+      "bodyModel": "IntroCreateRequest",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoIntroResponse"
+    },
+    {
+      "operationId": "createProject",
+      "name": "createProject",
+      "method": "POST",
+      "path": "/api/v1/projects/create",
+      "query": [],
+      "bodyModel": "formParams",
+      "multipart": true,
+      "bearerAuth": true,
+      "response": "ResponseDtoProjectListResponse"
+    },
+    {
+      "operationId": "delete",
+      "name": "_delete",
+      "method": "DELETE",
+      "path": "/api/admissions/admin/{admissionId}",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoVoid"
+    },
+    {
+      "operationId": "deleteComment",
+      "name": "deleteComment",
+      "method": "DELETE",
+      "path": "/api/v1/comment/{commentId}",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoString"
+    },
+    {
+      "operationId": "deleteIntro",
+      "name": "deleteIntro",
+      "method": "DELETE",
+      "path": "/api/v1/intros/{introId}",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoVoid"
+    },
+    {
+      "operationId": "deleteProfileImage",
+      "name": "deleteProfileImage",
+      "method": "DELETE",
+      "path": "/api/v1/profile-images",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoVoid"
+    },
+    {
+      "operationId": "deleteProject",
+      "name": "deleteProject",
+      "method": "DELETE",
+      "path": "/api/v1/projects/delete/{projectId}",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoString"
+    },
+    {
+      "operationId": "getActivitySummary",
+      "name": "getActivitySummary",
+      "method": "GET",
+      "path": "/api/v1/users/me/activity",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoUserActivityResponse"
+    },
+    {
+      "operationId": "getAll",
+      "name": "getAll",
+      "method": "GET",
+      "path": "/api/admissions/admin",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoListAdmissionResultResponse"
+    },
+    {
+      "operationId": "getAllProjects",
+      "name": "getAllProjects",
+      "method": "GET",
+      "path": "/api/v1/projects",
+      "query": [
+        "pageable"
+      ],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoListProjectListResponse"
+    },
+    {
+      "operationId": "getAllTags",
+      "name": "getAllTags",
+      "method": "GET",
+      "path": "/api/v1/tags",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoListString"
+    },
+    {
+      "operationId": "getComments",
+      "name": "getComments",
+      "method": "GET",
+      "path": "/api/v1/comment/{postId}/comments",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoListCommentResponse"
+    },
+    {
+      "operationId": "getCommitHistories",
+      "name": "getCommitHistories",
+      "method": "GET",
+      "path": "/api/v1/posts/commits/{postId}",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoListCommitHistoryResponse"
+    },
+    {
+      "operationId": "getCurrentUserProfile",
+      "name": "getCurrentUserProfile",
+      "method": "GET",
+      "path": "/api/v1/users/me/get/profile",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoUserProfileResponse"
+    },
+    {
+      "operationId": "getCurrentUserRole",
+      "name": "getCurrentUserRole",
+      "method": "GET",
+      "path": "/api/v1/users/me/role",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoString"
+    },
+    {
+      "operationId": "getHomeFeed",
+      "name": "getHomeFeed",
+      "method": "GET",
+      "path": "/api/v1/posts/feed",
+      "query": [
+        "page",
+        "size",
+        "sort",
+        "tags"
+      ],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoHomeFeedResponse"
+    },
+    {
+      "operationId": "getIntroList",
+      "name": "getIntroList",
+      "method": "GET",
+      "path": "/api/v1/intros",
+      "query": [
+        "page",
+        "size",
+        "sort"
+      ],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoPagedResponseIntroResponse"
+    },
+    {
+      "operationId": "getMyComments",
+      "name": "getMyComments",
+      "method": "GET",
+      "path": "/api/v1/comment/me/comments",
+      "query": [
+        "page",
+        "size",
+        "sort"
+      ],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoPagedResponseCommentListResponse"
+    },
+    {
+      "operationId": "getMyLikes",
+      "name": "getMyLikes",
+      "method": "GET",
+      "path": "/api/v1/likes/me",
+      "query": [
+        "page",
+        "size",
+        "sort"
+      ],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoPagedResponseLikeResponse"
+    },
+    {
+      "operationId": "getMyPosts",
+      "name": "getMyPosts",
+      "method": "GET",
+      "path": "/api/v1/posts/me",
+      "query": [
+        "page",
+        "size",
+        "sort"
+      ],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoPagedResponsePostListResponse"
+    },
+    {
+      "operationId": "getPendingUsers",
+      "name": "getPendingUsers",
+      "method": "GET",
+      "path": "/api/admin/users/pending",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoListPendingUserResponse"
+    },
+    {
+      "operationId": "getPostDetail",
+      "name": "getPostDetail",
+      "method": "GET",
+      "path": "/api/v1/posts/{postId}",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoPostDetailResponse"
+    },
+    {
+      "operationId": "getPosts",
+      "name": "getPosts",
+      "method": "GET",
+      "path": "/api/v1/posts",
+      "query": [
+        "page",
+        "size",
+        "sort",
+        "tags"
+      ],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoPagedResponsePostListResponse"
+    },
+    {
+      "operationId": "getPostsByTag",
+      "name": "getPostsByTag",
+      "method": "GET",
+      "path": "/api/v1/posts/tags/{tagName}",
+      "query": [
+        "page",
+        "size",
+        "sort"
+      ],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoPagedResponsePostListResponse"
+    },
+    {
+      "operationId": "getProfileImage",
+      "name": "getProfileImage",
+      "method": "GET",
+      "path": "/api/v1/profile-images",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoProfileImageResponse"
+    },
+    {
+      "operationId": "getPublicProfileByNickname",
+      "name": "getPublicProfileByNickname",
+      "method": "GET",
+      "path": "/api/v1/users/public/profile/{nickname}",
+      "query": [
+        "page",
+        "size",
+        "sort"
+      ],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoUserPublicProfileResponse"
+    },
+    {
+      "operationId": "getWeeklyPopularPosts",
+      "name": "getWeeklyPopularPosts",
+      "method": "GET",
+      "path": "/api/v1/posts/popular",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoListPostPopularResponse"
+    },
+    {
+      "operationId": "isPostLiked",
+      "name": "isPostLiked",
+      "method": "GET",
+      "path": "/api/v1/likes/{postId}/liked",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoBoolean"
+    },
+    {
+      "operationId": "likePost",
+      "name": "likePost",
+      "method": "POST",
+      "path": "/api/v1/likes/{postId}",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoString"
+    },
+    {
+      "operationId": "logout",
+      "name": "logout",
+      "method": "POST",
+      "path": "/api/auth/me/logout",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoString"
+    },
+    {
+      "operationId": "lookup",
+      "name": "lookup",
+      "method": "POST",
+      "path": "/api/admissions/lookup",
+      "query": [],
+      "bodyModel": "LookupRequest",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoLookupResponse"
+    },
+    {
+      "operationId": "publishPost",
+      "name": "publishPost",
+      "method": "POST",
+      "path": "/api/v1/posts",
+      "query": [],
+      "bodyModel": "PostRequest",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoPostResponse"
+    },
+    {
+      "operationId": "reissue",
+      "name": "reissue",
+      "method": "POST",
+      "path": "/api/auth/reissue",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoAccessTokenResponse"
+    },
+    {
+      "operationId": "removePost",
+      "name": "removePost",
+      "method": "DELETE",
+      "path": "/api/v1/posts/{id}",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoVoid"
+    },
+    {
+      "operationId": "revisePost",
+      "name": "revisePost",
+      "method": "PUT",
+      "path": "/api/v1/posts/{id}",
+      "query": [],
+      "bodyModel": "PostRequest",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoPostResponse"
+    },
+    {
+      "operationId": "searchPosts",
+      "name": "searchPosts",
+      "method": "GET",
+      "path": "/api/v1/posts/search",
+      "query": [
+        "keyword",
+        "pageable"
+      ],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoPagedResponsePostListResponse"
+    },
+    {
+      "operationId": "unlikePost",
+      "name": "unlikePost",
+      "method": "DELETE",
+      "path": "/api/v1/likes/{postId}",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoString"
+    },
+    {
+      "operationId": "update",
+      "name": "update",
+      "method": "PUT",
+      "path": "/api/admissions/admin/{admissionId}",
+      "query": [],
+      "bodyModel": "UpdateAdmissionResultRequest",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoLong"
+    },
+    {
+      "operationId": "updateProfile",
+      "name": "updateProfile",
+      "method": "PUT",
+      "path": "/api/v1/users/me/update/profile",
+      "query": [],
+      "bodyModel": "UpdateProfileRequest",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoUserProfileResponse"
+    },
+    {
+      "operationId": "updateProfileImage",
+      "name": "updateProfileImage",
+      "method": "PUT",
+      "path": "/api/v1/profile-images",
+      "query": [],
+      "bodyModel": "formParams",
+      "multipart": true,
+      "bearerAuth": true,
+      "response": "ResponseDtoProfileImageResponse"
+    },
+    {
+      "operationId": "updateProject",
+      "name": "updateProject",
+      "method": "PUT",
+      "path": "/api/v1/projects/update/{projectId}",
+      "query": [],
+      "bodyModel": "formParams",
+      "multipart": true,
+      "bearerAuth": true,
+      "response": "ResponseDtoProjectListResponse"
+    },
+    {
+      "operationId": "uploadImage",
+      "name": "uploadImage",
+      "method": "POST",
+      "path": "/api/v1/posts/images",
+      "query": [],
+      "bodyModel": "formParams",
+      "multipart": true,
+      "bearerAuth": true,
+      "response": "ResponseDtoString"
+    },
+    {
+      "operationId": "withdraw",
+      "name": "withdraw",
+      "method": "DELETE",
+      "path": "/api/v1/users/me/withdraw",
+      "query": [],
+      "bodyModel": "",
+      "multipart": false,
+      "bearerAuth": true,
+      "response": "ResponseDtoString"
+    }
+  ],
+  "models": {
+    "AccessTokenResponse": {
+      "fields": {
+        "authorization": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        }
+      }
+    },
+    "AdmissionResultResponse": {
+      "fields": {
+        "id": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "name": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "phoneDigits": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "status": {
+          "optional": true,
+          "type": "AdmissionResultResponseStatusEnum",
+          "description": ""
+        }
+      }
+    },
+    "ChatMessageRequest": {
+      "fields": {
+        "message": {
+          "optional": false,
+          "type": "string",
+          "description": ""
+        }
+      }
+    },
+    "ChatMessageResponse": {
+      "fields": {
+        "content": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        }
+      }
+    },
+    "CommentListResponse": {
+      "fields": {
+        "commentId": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "content": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "createdAt": {
+          "optional": true,
+          "type": "Date",
+          "description": ""
+        },
+        "postId": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "postTitle": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        }
+      }
+    },
+    "CommentRequest": {
+      "fields": {
+        "content": {
+          "optional": false,
+          "type": "string",
+          "description": "댓글 내용"
+        },
+        "parentCommentId": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "CommentResponse": {
+      "fields": {
+        "commentId": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "writer": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "writerProfileImageUrl": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "content": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "createdAt": {
+          "optional": true,
+          "type": "Date",
+          "description": ""
+        },
+        "replies": {
+          "optional": true,
+          "type": "Array<CommentResponse>",
+          "description": ""
+        }
+      }
+    },
+    "CommitHistoryResponse": {
+      "fields": {
+        "sha": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "createdAt": {
+          "optional": true,
+          "type": "Date",
+          "description": ""
+        }
+      }
+    },
+    "CreateAdmissionResultRequest": {
+      "fields": {
+        "name": {
+          "optional": false,
+          "type": "string",
+          "description": ""
+        },
+        "phone": {
+          "optional": false,
+          "type": "string",
+          "description": ""
+        },
+        "status": {
+          "optional": false,
+          "type": "CreateAdmissionResultRequestStatusEnum",
+          "description": ""
+        }
+      }
+    },
+    "HomeFeedResponse": {
+      "fields": {
+        "weeklyPopular": {
+          "optional": true,
+          "type": "Array<PostPopularResponse>",
+          "description": ""
+        },
+        "latest": {
+          "optional": true,
+          "type": "PagedResponsePostListResponse",
+          "description": ""
+        },
+        "allTags": {
+          "optional": true,
+          "type": "Array<string>",
+          "description": ""
+        }
+      }
+    },
+    "IntroCreateRequest": {
+      "fields": {
+        "content": {
+          "optional": false,
+          "type": "string",
+          "description": ""
+        }
+      }
+    },
+    "IntroResponse": {
+      "fields": {
+        "introId": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "userId": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "nickname": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "profileImageUrl": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "content": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "createdAt": {
+          "optional": true,
+          "type": "Date",
+          "description": ""
+        }
+      }
+    },
+    "LikeResponse": {
+      "fields": {
+        "likeId": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "postId": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "title": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "contentSnippet": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "writer": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "writerProfileImageUrl": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "thumbnailImageUrl": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "createdAt": {
+          "optional": true,
+          "type": "Date",
+          "description": ""
+        },
+        "tags": {
+          "optional": true,
+          "type": "Array<string>",
+          "description": ""
+        }
+      }
+    },
+    "LookupRequest": {
+      "fields": {
+        "name": {
+          "optional": false,
+          "type": "string",
+          "description": ""
+        },
+        "phone": {
+          "optional": false,
+          "type": "string",
+          "description": ""
+        }
+      }
+    },
+    "LookupResponse": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "LookupResponseStatusEnum",
+          "description": ""
+        }
+      }
+    },
+    "Pageable": {
+      "fields": {
+        "page": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "size": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "sort": {
+          "optional": true,
+          "type": "Array<string>",
+          "description": ""
+        }
+      }
+    },
+    "PagedResponse": {
+      "fields": {
+        "content": {
+          "optional": true,
+          "type": "Array<object>",
+          "description": ""
+        },
+        "page": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "size": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "totalElements": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "totalPages": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "PagedResponseCommentListResponse": {
+      "fields": {
+        "content": {
+          "optional": true,
+          "type": "Array<CommentListResponse>",
+          "description": ""
+        },
+        "page": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "size": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "totalElements": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "totalPages": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "PagedResponseIntroResponse": {
+      "fields": {
+        "content": {
+          "optional": true,
+          "type": "Array<IntroResponse>",
+          "description": ""
+        },
+        "page": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "size": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "totalElements": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "totalPages": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "PagedResponseLikeResponse": {
+      "fields": {
+        "content": {
+          "optional": true,
+          "type": "Array<LikeResponse>",
+          "description": ""
+        },
+        "page": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "size": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "totalElements": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "totalPages": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "PagedResponsePostListResponse": {
+      "fields": {
+        "content": {
+          "optional": true,
+          "type": "Array<PostListResponse>",
+          "description": ""
+        },
+        "page": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "size": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "totalElements": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "totalPages": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "PendingUserResponse": {
+      "fields": {
+        "userId": {
+          "optional": true,
+          "type": "number",
+          "description": "유저 ID"
+        },
+        "gamjaBatch": {
+          "optional": true,
+          "type": "number",
+          "description": "감자기수"
+        },
+        "name": {
+          "optional": true,
+          "type": "string",
+          "description": "이름"
+        },
+        "position": {
+          "optional": true,
+          "type": "string",
+          "description": "포지션/직책"
+        }
+      }
+    },
+    "PostDetailResponse": {
+      "fields": {
+        "postId": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "title": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "content": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "writer": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "writerProfileImageUrl": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "likesCount": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "githubId": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "createdAt": {
+          "optional": true,
+          "type": "Date",
+          "description": ""
+        },
+        "updatedAt": {
+          "optional": true,
+          "type": "Date",
+          "description": ""
+        },
+        "tags": {
+          "optional": true,
+          "type": "Array<string>",
+          "description": ""
+        },
+        "comments": {
+          "optional": true,
+          "type": "Array<CommentResponse>",
+          "description": ""
+        }
+      }
+    },
+    "PostListResponse": {
+      "fields": {
+        "postId": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "title": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "contentSnippet": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "writer": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "writerProfileImageUrl": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "createdAt": {
+          "optional": true,
+          "type": "Date",
+          "description": ""
+        },
+        "tags": {
+          "optional": true,
+          "type": "Array<string>",
+          "description": ""
+        },
+        "thumbnailImageUrl": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        }
+      }
+    },
+    "PostPopularResponse": {
+      "fields": {
+        "postId": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "title": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "writer": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "writerProfileImageUrl": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        }
+      }
+    },
+    "PostRequest": {
+      "fields": {
+        "title": {
+          "optional": false,
+          "type": "string",
+          "description": ""
+        },
+        "content": {
+          "optional": false,
+          "type": "string",
+          "description": ""
+        },
+        "tags": {
+          "optional": false,
+          "type": "Array<string>",
+          "description": ""
+        },
+        "commitMessage": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        }
+      }
+    },
+    "PostResponse": {
+      "fields": {
+        "postId": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "authorGithubId": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "repositoryName": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "title": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "content": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "tags": {
+          "optional": true,
+          "type": "Array<string>",
+          "description": ""
+        },
+        "commitMessage": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "createdAt": {
+          "optional": true,
+          "type": "Date",
+          "description": ""
+        },
+        "updatedAt": {
+          "optional": true,
+          "type": "Date",
+          "description": ""
+        }
+      }
+    },
+    "ProfileImageResponse": {
+      "fields": {
+        "id": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "imageUrl": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        }
+      }
+    },
+    "ProjectListResponse": {
+      "fields": {
+        "id": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "title": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "snippet": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "thumbnailUrl": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        }
+      }
+    },
+    "ProjectRequest": {
+      "fields": {
+        "title": {
+          "optional": true,
+          "type": "string",
+          "description": "프로젝트 제목"
+        },
+        "description": {
+          "optional": true,
+          "type": "string",
+          "description": "프로젝트 설명"
+        }
+      }
+    },
+    "ResponseDto": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "ProjectListResponse",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoAccessTokenResponse": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "AccessTokenResponse",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoBoolean": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "boolean",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoCommentResponse": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "CommentResponse",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoHomeFeedResponse": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "HomeFeedResponse",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoIntroResponse": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "IntroResponse",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoListAdmissionResultResponse": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "Array<AdmissionResultResponse>",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoListCommentResponse": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "Array<CommentResponse>",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoListCommitHistoryResponse": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "Array<CommitHistoryResponse>",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoListPendingUserResponse": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "Array<PendingUserResponse>",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoListPostPopularResponse": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "Array<PostPopularResponse>",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoListProjectListResponse": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "Array<ProjectListResponse>",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoListString": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "Array<string>",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoLong": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoLookupResponse": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "LookupResponse",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoPagedResponseCommentListResponse": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "PagedResponseCommentListResponse",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoPagedResponseIntroResponse": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "PagedResponseIntroResponse",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoPagedResponseLikeResponse": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "PagedResponseLikeResponse",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoPagedResponsePostListResponse": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "PagedResponsePostListResponse",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoPostDetailResponse": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "PostDetailResponse",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoPostResponse": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "PostResponse",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoProfileImageResponse": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "ProfileImageResponse",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoProjectListResponse": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "ProjectListResponse",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoString": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoUserActivityResponse": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "UserActivityResponse",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoUserProfileResponse": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "UserProfileResponse",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoUserPublicProfileResponse": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "UserPublicProfileResponse",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "ResponseDtoVoid": {
+      "fields": {
+        "status": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        },
+        "message": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "data": {
+          "optional": true,
+          "type": "object",
+          "description": ""
+        },
+        "timestamp": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "UpdateAdmissionResultRequest": {
+      "fields": {
+        "name": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "phone": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "status": {
+          "optional": true,
+          "type": "UpdateAdmissionResultRequestStatusEnum",
+          "description": ""
+        }
+      }
+    },
+    "UpdateProfileRequest": {
+      "fields": {
+        "email": {
+          "optional": false,
+          "type": "string",
+          "description": "이메일"
+        },
+        "studentNumber": {
+          "optional": false,
+          "type": "string",
+          "description": "학번"
+        },
+        "gamjaBatch": {
+          "optional": false,
+          "type": "number",
+          "description": "감자 동아리 기수"
+        },
+        "position": {
+          "optional": false,
+          "type": "UpdateProfileRequestPositionEnum",
+          "description": "포지션/직책"
+        }
+      }
+    },
+    "UserActivityResponse": {
+      "fields": {
+        "likedPostCount": {
+          "optional": true,
+          "type": "number",
+          "description": "좋아요 한 게시물 수"
+        },
+        "writtenPostCount": {
+          "optional": true,
+          "type": "number",
+          "description": "작성한 게시물 수"
+        },
+        "writtenCommentCount": {
+          "optional": true,
+          "type": "number",
+          "description": "작성한 댓글 수"
+        }
+      }
+    },
+    "UserMiniProfileResponse": {
+      "fields": {
+        "profileImageUrl": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "nickname": {
+          "optional": true,
+          "type": "string",
+          "description": ""
+        },
+        "gamjaBatch": {
+          "optional": true,
+          "type": "number",
+          "description": ""
+        }
+      }
+    },
+    "UserProfileRequest": {
+      "fields": {
+        "email": {
+          "optional": true,
+          "type": "string",
+          "description": "이메일"
+        },
+        "studentNumber": {
+          "optional": false,
+          "type": "string",
+          "description": "학번"
+        },
+        "gamjaBatch": {
+          "optional": false,
+          "type": "number",
+          "description": "감자 동아리 기수"
+        },
+        "position": {
+          "optional": false,
+          "type": "UserProfileRequestPositionEnum",
+          "description": "포지션/직책"
+        }
+      }
+    },
+    "UserProfileResponse": {
+      "fields": {
+        "githubId": {
+          "optional": true,
+          "type": "string",
+          "description": "Github 아이디"
+        },
+        "nickname": {
+          "optional": true,
+          "type": "string",
+          "description": "닉네임"
+        },
+        "name": {
+          "optional": true,
+          "type": "string",
+          "description": "이름"
+        },
+        "email": {
+          "optional": true,
+          "type": "string",
+          "description": "이메일"
+        },
+        "profileImageUrl": {
+          "optional": true,
+          "type": "string",
+          "description": "프로필 이미지 URL"
+        },
+        "position": {
+          "optional": true,
+          "type": "string",
+          "description": "직책/포지션"
+        },
+        "role": {
+          "optional": true,
+          "type": "string",
+          "description": "유저 역할"
+        },
+        "studentNumber": {
+          "optional": true,
+          "type": "string",
+          "description": "학번"
+        },
+        "gamjaBatch": {
+          "optional": true,
+          "type": "number",
+          "description": "감자 동아리 기수"
+        },
+        "createdAt": {
+          "optional": true,
+          "type": "string",
+          "description": "생성 일시"
+        },
+        "updatedAt": {
+          "optional": true,
+          "type": "string",
+          "description": "수정 일시"
+        }
+      }
+    },
+    "UserPublicProfileResponse": {
+      "fields": {
+        "profile": {
+          "optional": true,
+          "type": "UserMiniProfileResponse",
+          "description": ""
+        },
+        "activity": {
+          "optional": true,
+          "type": "UserActivityResponse",
+          "description": ""
+        },
+        "posts": {
+          "optional": true,
+          "type": "PagedResponsePostListResponse",
+          "description": ""
+        }
+      }
+    }
+  }
+}

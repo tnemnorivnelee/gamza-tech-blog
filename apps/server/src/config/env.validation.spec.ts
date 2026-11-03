@@ -12,11 +12,23 @@ describe('validateEnv', () => {
     expect(validateEnv({ PORT: '8080' }).PORT).toBe(8080);
   });
 
+  it('OPENAPI_SERVER_URL은 비워 두거나 URL이어야 한다', () => {
+    expect(
+      validateEnv({ OPENAPI_SERVER_URL: '' }).OPENAPI_SERVER_URL,
+    ).toBeUndefined();
+    expect(
+      validateEnv({ OPENAPI_SERVER_URL: 'https://api.example.com' })
+        .OPENAPI_SERVER_URL,
+    ).toBe('https://api.example.com');
+  });
+
   it.each([
     { PORT: 'abc' },
     { PORT: '70000' },
     { PORT: '' },
     { NODE_ENV: 'staging' },
+    { OPENAPI_SERVER_URL: 'not a url' },
+    { OPENAPI_SERVER_URL: 'api.example.com' },
   ])('잘못된 값이면 던진다 %o', (config) => {
     expect(() => validateEnv(config)).toThrow('환경변수가 올바르지 않습니다');
   });

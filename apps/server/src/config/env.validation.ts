@@ -1,7 +1,15 @@
 // class-transformer의 자동 형 변환이 Reflect 메타데이터를 쓴다.
 import 'reflect-metadata';
-import { plainToInstance } from 'class-transformer';
-import { IsIn, IsInt, Max, Min, validateSync } from 'class-validator';
+import { plainToInstance, Transform } from 'class-transformer';
+import {
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsUrl,
+  Max,
+  Min,
+  validateSync,
+} from 'class-validator';
 
 export class EnvironmentVariables {
   @IsIn(['development', 'test', 'production'])
@@ -11,6 +19,13 @@ export class EnvironmentVariables {
   @Min(1)
   @Max(65535)
   PORT: number = 3000;
+
+  // 명세의 servers 항목. 프론트 생성 클라이언트의 BASE_PATH가 여기서 나온다(옛 openapi.server-url).
+  // 비워 두면 항목을 내보내지 않는다.
+  @IsOptional()
+  @Transform(({ value }) => (value === '' ? undefined : value))
+  @IsUrl({ require_protocol: true, require_tld: false })
+  OPENAPI_SERVER_URL?: string;
 }
 
 // 부팅 때 한 번 실행한다. 잘못된 값이 있으면 서버를 띄우지 않는다.

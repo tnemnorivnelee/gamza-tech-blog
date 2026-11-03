@@ -11,6 +11,7 @@
     "dev": "yarn workspace @gamza/server start:dev",
     "build": "yarn workspace @gamza/server build",
     "lint": "yarn workspace @gamza/server lint",
+    "typecheck": "yarn workspace @gamza/server typecheck",
     "test": "yarn workspace @gamza/server test"
   }
 }

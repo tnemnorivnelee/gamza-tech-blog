@@ -67,7 +67,7 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
 "OpenAPI 계약 유지"는 경로만 맞추면 끝이 아니다. 아래가 전부 **필수 조건**이다.
 
 **확인한 사실**
-- 스펙 주소는 `/v3/api-docs/all`이다(springdoc 그룹 `all`). `gen:api`는 openapi-generator 7.14.0의 `typescript-fetch`, 옵션 `typescriptThreePlus, useInterfaces, disableESLint`로 `DefaultApi` 클래스 **하나**(48개)와 모델 66개를 만든다.
+- 스펙 주소는 `/v3/api-docs/all`이다(springdoc 그룹 `all`). `gen:api`는 openapi-generator 7.14.0의 `typescript-fetch`, 옵션 `typescriptThreePlus, useInterfaces, disableESLint`로 `DefaultApi` 클래스 **하나**(48개)와 모델 65개를 만든다.
 - 성공 응답은 `ResponseDto {status, message, data(null이면 생략), timestamp(epoch ms)}`이고 목록은 `PagedResponse {content, page(0부터), size, totalElements, totalPages}`이다.
 - 에러 응답은 `{message, status, code(문자열), errors:[{field,value,reason}]}`이다. 프론트는 `body.message`와 `body.code`를 읽는다(`src/lib/actionResult.ts`, `imageService.ts`).
 - 스키마 이름은 `ResponseDtoXxx`, `PagedResponseXxx`, `ResponseDtoListXxx` 같은 형태다. 날짜는 프론트가 `new Date(json[...])`로 읽는다.
@@ -75,16 +75,21 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
 **포팅 기준** [제안]: 옛 레포의 컨트롤러·DTO·`ErrorCode`를 필드 단위로 1:1 옮긴다(무엇을 만들지의 기준). 프론트의 생성 코드(`src/generated/api/`)는 운영 스펙을 받아 만든 결과라서 **최종 심판**으로 쓴다(맞는지의 기준). 옛 레포 `master`가 운영에 배포된 코드와 다를 수 있으므로 둘이 어긋나면 프론트 생성 코드를 따른다. 이 두 출처로 충분하고 옛 서버를 다시 띄울 필요는 없다(DB, Redis, 복호화 비밀번호가 필요하다).
 
 **지켜야 할 것** [제안]
-1. **operationId = 메서드 이름.** `operationIdFactory: (_, method) => method`. `DefaultApi`가 하나뿐이라 메서드 이름은 컨트롤러 전체에서 유일해야 한다.
-2. **`@ApiTags`를 쓰지 않는다.** typescript-fetch는 태그마다 API 클래스를 나눠서 프론트 import가 전부 깨진다. 옛 스펙이 왜 태그 없이 나왔는지는 설명하지 못했으므로 [미검증], 5번의 diff로 확인한다.
-3. **제네릭 래퍼 이름을 명시한다.** Nest는 제네릭을 못 쓰므로 `ResponseDtoOf(Model)` 헬퍼로 `ResponseDto${Model}` 이름의 클래스를 만든다. 이 방식이 실제로 동작하는지는 [미검증]이라 **스켈레톤 단계에서 가장 먼저 시험**한다.
+1. **operationId = 메서드 이름.** `operationIdFactory: (_, method) => method`. `DefaultApi`가 하나뿐이라 메서드 이름은 컨트롤러 전체에서 유일해야 하고, 비교 함수가 중복을 검사한다. 예약어 `delete`는 그대로 쓴다(생성기가 `_delete`로 바꾼다).
+2. **태그를 붙이지 않는다.** typescript-fetch는 태그마다 API 클래스를 나눠서 프론트 import가 전부 깨진다. `@nestjs/swagger`는 컨트롤러 이름으로 태그를 **자동으로 붙이므로**(시험에서 `FakeComment` 태그가 실제로 나왔다) `createDocument`에 `autoTagControllers: false`를 준다. [확인함] 옛 컨트롤러는 `@Operation(tags = "댓글 기능")` 같은 한글 태그를 `@Operation` 45개 중 32개에 붙였는데도 프론트에는 `DefaultApi`뿐이다. 한글만 있는 태그를 생성기가 지워서 기본 클래스로 모았을 가능성이 있지만 [미검증], 우리는 태그를 두지 않으므로 어느 쪽이든 `DefaultApi`가 되는 것이 기대값이다. 전체 생성기 diff(M8)로 확인한다.
+3. **제네릭 래퍼 이름을 명시한다.** Nest는 제네릭을 못 쓰므로 `common/dto/response-dto.ts`의 헬퍼(`ResponseDtoOf`, `ResponseDtoListOf`, `ResponseDtoPagedOf`, `ResponseDtoString`·`Long`·`Boolean`·`Void`)가 `ResponseDto${Model}` 이름의 클래스를 만들어 캐시한다. 응답 필드는 옛 springdoc 명세처럼 전부 선택(required 없음)이다. 같은 스키마 이름과 필드가 나오는 것을 M1-1 시험에서 확인했다. [확인함] 클래스 이름이 곧 스키마 이름이다.
 4. **응답 모양을 같게 한다.** `data` null 생략, `timestamp` epoch ms, 페이지 번호 0부터, 에러 `code` 문자열은 옛 `ErrorCode` 표를 그대로 옮긴다.
+   - **HTTP 상태는 모두 200이다.** 옛 컨트롤러는 `ResponseEntity`도 `@ResponseStatus`도 쓰지 않아서, `ResponseDto.of(HttpStatus.CREATED, …)`를 돌려줘도 HTTP는 200이었고 본문 `status`만 201이었다. Nest는 POST를 201로 내므로 `@Ok(모델)` 데코레이터가 `@HttpCode(200)`과 문서의 200 응답을 **함께** 건다. 한쪽만 걸면 문서와 실제가 어긋난다. [확인함]
+   - 본문 `status`는 컨트롤러가 `ok(message, data, status)`로 넘기는 값이다. HTTP 상태와 별개다.
 5. **날짜 형식을 같게 한다.** 옛 코드는 `LocalDateTime`(12개 파일)이라 오프셋 없는 ISO일 가능성이 높지만 [미검증], 덤프와 실제 응답으로 확인한다.
 6. **검증은 두 단계로 한다.**
-   - 가벼운 검사(CI에서 매번): Nest가 만든 `openapi.json`의 operationId, 메서드, 경로, 파라미터, 스키마 이름, **모델의 필드 이름과 타입**을 옛 계약과 비교한다. 옛 계약은 `extract-api.mjs`처럼 생성 코드(`DefaultApi.ts`와 모델 66개)를 일반 Node 스크립트로 읽어 만든다. 기대하는 차이는 1절에서 뺀 13개 operation(과 그것만 쓰는 모델)뿐이고, 목록에 `deferred`로 표시해 둔다. Java가 필요 없다.
+   - 가벼운 검사(CI에서 매번): Nest가 만든 `openapi.json`의 operationId, 메서드, 경로, 파라미터, 스키마 이름, **모델의 필드 이름과 타입**을 옛 계약과 비교한다. 옛 계약은 `extract-api.mjs`처럼 생성 코드(`DefaultApi.ts`와 모델 65개)를 `apps/server/scripts/extract-contract.mjs`로 읽어 `apps/server/contract/front-contract.json`에 저장해 둔다(operation 48개). `test/contract/diff-contract.ts`가 이것과 비교하고, 지금은 가짜 컨트롤러가 흉내 내는 작업 4개만 대상이다. 생성기가 예약어 이름에 붙이는 `_`(`delete` → `_delete`)는 비교할 때 뗀다. 비교 함수가 틀린 것을 실제로 잡는지도 시험한다. 기대하는 차이는 1절에서 뺀 13개 operation(과 그것만 쓰는 모델)뿐이고, 목록에 `deferred`로 표시해 둔다. Java가 필요 없다.
    - 전체 검사(프론트 전환 직전 1회): 같은 generator 7.14.0으로 임시 폴더에 생성해서 `src/generated/api/`와 diff한다. **로컬에 Java도 Docker도 없으므로** Docker 설치 후 generator의 Docker 이미지로 돌리는 것을 추천한다.
 7. **프론트에서 `yarn gen:api`를 돌리지 않는다.** 새 백엔드의 diff가 깨끗해진 뒤, 서버 URL을 바꾸는 별도 프론트 이슈와 PR에서 한다.
-8. 스펙 주소를 같게 하려면 Swagger의 `jsonDocumentUrl` 옵션을 쓴다 [미검증: 구현 시 옵션 이름 확인]. 전역 `bearerAuth` 표시도 옛 스펙처럼 유지해서 생성 코드 diff를 줄인다.
+8. 스펙 주소는 `SwaggerModule.setup`의 `jsonDocumentUrl: 'v3/api-docs/all'`로 같게 한다. 보안 스킴 이름은 정확히 `bearerAuth`(http bearer JWT)이고 전역으로 건다. 생성된 클라이언트가 `token("bearerAuth")`로 토큰을 찾는다(48개 모두). 명세는 OpenAPI 3.0.0으로 나온다. [확인함]
+9. **`servers`는 환경변수 `OPENAPI_SERVER_URL`(선택)로 내보낸다.** 프론트의 `BASE_PATH`가 `https://gamzatech.site`인 것은 옛 명세에 `servers` 항목이 있었기 때문이다(옛 `openapi.server-url`). 새 주소가 정해지면 이 값을 넣고 프론트에서 `gen:api`를 돌리면 `BASE_PATH`가 바뀐다. 비어 있으면 항목을 내보내지 않는다.
+10. **`@nestjs/swagger` CLI 플러그인을 켜지 않고, 모든 `@ApiProperty`에 `type`을 명시한다.** vitest(oxc)와 `nest build`(tsc)가 만드는 타입 메타데이터가 다를 수 있다. 시험이 검사하는 문서와 실제로 나가는 문서가 같아야 한다.
+11. **프론트가 쓰는 `Pageable`은 스키마로 내보내고, 쓰지 않는 원시 `ResponseDto`·`PagedResponse` 모델은 내보내지 않는다** [허용한 차이]. 프론트는 `Pageable`을 쿼리 파라미터 타입으로 직접 import한다(11곳). 원시 `ResponseDto`는 springdoc이 제네릭의 첫 인스턴스에 기본 이름을 붙인 흔적이라 `data`가 `ProjectListResponse`로 되어 있어 흉내 낼 이유가 없다. 쿼리 파라미터 `page`·`size`·`sort`는 `@ApiPageable()`이 옛 `@ParameterObject Pageable`처럼 펼친다.
 
 ## 6. 인증
 
@@ -148,7 +153,7 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
 
 **A. 지금 시작 가능 (덤프 불필요. 단 M2~M3의 사용자 저장은 M4 이후에 연결)**
 - **M0** 레포 생성(승인 후), 스켈레톤, lint/test/build CI, 환경변수 검증
-- **M1** 공통 응답·에러·`ErrorCode`, Swagger 설정, 가짜 컨트롤러 1~2개로 **계약 diff 방식이 통하는지 먼저 시험** (가장 큰 위험을 맨 앞에 둔다)
+- **M1** 가장 큰 위험(계약)을 맨 앞에 둔다. **M1-1** 응답 래퍼, Swagger 설정, 가짜 컨트롤러로 계약 diff 시험(통과). **M1-2** `ErrorCode`와 전역 예외 필터
 - **M2** 인증: JWT, `TokenStore`(Redis), 쿠키, reissue·logout, 가드, 접근 규칙 표 테스트. 가드가 role을 `UserRepository`로 읽으므로 **인메모리 구현으로 개발**한다.
 - **M3** GitHub 로그인 (새 OAuth 앱 필요). 콜백이 사용자를 찾거나 PRE_REGISTER로 만드는 부분은 `UserRepository`까지만 만들고, 실제 저장은 M4 뒤에 연결한다.
 
@@ -185,10 +190,11 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
 
 | 항목 | 언제 |
 |---|---|
-| `ResponseDtoOf` 헬퍼가 같은 스키마 이름을 만드는가 | M1 |
-| 옛 스펙이 태그 없이(`DefaultApi` 하나로) 나온 이유 | M1 |
-| `jsonDocumentUrl` 옵션 이름 | M1 |
-| 옛 레포 `master`와 운영 스펙(프론트 생성 코드)이 어긋나는 곳 | M1 |
+| 한글 태그가 생성기에서 `DefaultApi`로 모이는지(옛 명세가 한 클래스였던 이유의 가설) | M8 |
+| 옛 레포 `master`와 운영 스펙(프론트 생성 코드)이 어긋나는 곳 | M5~M6 (컨트롤러를 옮기며 비교 대상이 늘 때) |
+| enum 필드의 비교(6개 모델이 쓴다. 비교 함수는 아직 enum을 보지 않는다) | M5 |
+| `@NotBlank`·`@Size` 같은 요청 검증이 `@Valid` 없이도 실제로 실행됐는지(`addComment`에는 `@Valid`가 없다) | M6 |
+| 원시 `ResponseDto`·`PagedResponse` 없이 프론트가 재생성 후 컴파일되는지 | M8 |
 | ADMIN 부여 지점 | M2 |
 | 옛 GitHub 로그인 스코프(암호문)와 성공 후 리다이렉트 규칙 | M3 |
 | Prisma 7의 MySQL `db pull` 품질, v7 고정 | M4 |
@@ -197,4 +203,3 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
 | 글 이미지 업로드의 검증 기준 | M6 |
 | 챗봇 응답 캐시 키·TTL, 횟수 설정이 실제로 적용됐는지 | M7 |
 | S3 이미지 공개 읽기 여부 | 인프라 단계 |
-| NestJS·Prisma·의존성의 시작 시점 버전 | M0 |
