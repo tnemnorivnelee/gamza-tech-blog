@@ -1,2 +1,26 @@
 # gamza-tech-blog
-감자 기술 블로그 모노레포 (백엔드 재구축)
+
+감자 기술 블로그 모노레포입니다. 내려간 옛 백엔드를 NestJS로 같은 API 계약에 맞춰 다시 만들고 있습니다.
+
+## 구조
+
+- `apps/server`: NestJS API 서버
+- `apps/web`: 프론트엔드 (예정). 지금은 `potato-club/GamzaTechBlog-front`에서 따로 운영합니다.
+- `docs/backend-plan.md`: 구현 계획과 결정 이유
+
+## 개발
+
+Node 버전은 `.nvmrc`를 따릅니다. 패키지 매니저는 yarn(v1)입니다.
+
+```bash
+fnm use                                    # .nvmrc의 Node 사용
+yarn install
+cp apps/server/.env.example apps/server/.env
+yarn dev                                   # 개발 서버
+yarn lint && yarn test && yarn build       # CI와 같은 검사
+```
+
+## 지켜야 할 것
+
+- `.env`, DB 덤프(`*.sql`, `*.dump` 등)는 커밋하지 않습니다. 덤프에 개인정보가 있습니다.
+- 작업은 Issue → Branch(`<type>/<이슈번호>-<설명>`) → PR 순서로 합니다. 커밋 메시지는 한국어로 씁니다.

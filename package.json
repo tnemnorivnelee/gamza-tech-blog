@@ -1,0 +1,16 @@
+{
+  "name": "gamza-tech-blog",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=24.15.0 <25"
+  },
+  "scripts": {
+    "dev": "yarn workspace @gamza/server start:dev",
+    "build": "yarn workspace @gamza/server build",
+    "lint": "yarn workspace @gamza/server lint",
+    "test": "yarn workspace @gamza/server test"
+  }
+}
