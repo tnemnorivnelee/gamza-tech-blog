@@ -1,32 +1,15 @@
 import type { Type } from '@nestjs/common';
 import { ApiPropertyOptional, type ApiPropertyOptions } from '@nestjs/swagger';
 
-export interface ResponseBody<T> {
-  status: number;
-  message: string;
-  data?: T;
-  timestamp: number;
-}
-
-// 옛 ResponseDto.of(HttpStatus, message, data). data가 없으면 키를 뺀다(옛 @JsonInclude(NON_NULL)).
-// status는 본문 값일 뿐 HTTP 상태와 별개다. 옛 컨트롤러는 CREATED를 넣어도 HTTP는 200이었다.
-export function ok<T>(
-  message: string,
-  data?: T,
-  status = 200,
-): ResponseBody<T> {
-  return {
-    status,
-    message,
-    ...(data == null ? {} : { data }),
-    timestamp: Date.now(),
-  };
-}
+// 이 파일의 클래스는 응답을 만드는 용도가 아니라 OpenAPI 명세에 스키마 이름을 남기는 용도다.
+// 실제 응답 본문은 common/response/ok.ts의 ok()가 만든다.
+//
+// 옛 자바는 제네릭 ResponseDto<T>에서 springdoc이 ResponseDtoXxx 이름을 자동으로 지었다.
+// TypeScript는 실행 시점에 제네릭이 사라져서, 같은 이름의 클래스를 직접 만든다.
 
 const int32: ApiPropertyOptions = { type: 'integer', format: 'int32' };
 const int64: ApiPropertyOptions = { type: 'integer', format: 'int64' };
 
-// Nest는 제네릭 스키마 이름을 못 만든다. 옛 명세의 ResponseDtoXxx 같은 이름을 클래스 이름으로 직접 만든다.
 // 같은 이름은 같은 클래스를 돌려준다. 이름이 같은 다른 클래스가 생기면 스키마가 덮어써진다.
 const classes = new Map<string, Type>();
 

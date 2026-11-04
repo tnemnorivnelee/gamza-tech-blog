@@ -1,14 +1,14 @@
 import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam } from '@nestjs/swagger';
 import { Test } from '@nestjs/testing';
+import { ok } from '../../src/common/response/ok.js';
+import { ApiPageable, Ok } from '../../src/common/swagger/api-decorators.js';
 import {
-  ok,
   ResponseDtoOf,
   ResponseDtoPagedOf,
   ResponseDtoString,
   ResponseDtoVoid,
-} from '../../src/common/dto/response-dto.js';
-import { ApiPageable, Ok } from '../../src/common/swagger/api-decorators.js';
+} from '../../src/common/swagger/response-schemas.js';
 import { setupSwagger } from '../../src/common/swagger/setup-swagger.js';
 import { CommentListResponse } from '../../src/modules/comment/dto/comment-list-response.dto.js';
 import { CommentRequest } from '../../src/modules/comment/dto/comment-request.dto.js';

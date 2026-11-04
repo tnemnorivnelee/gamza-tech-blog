@@ -77,10 +77,10 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
 **지켜야 할 것** [제안]
 1. **operationId = 메서드 이름.** `operationIdFactory: (_, method) => method`. `DefaultApi`가 하나뿐이라 메서드 이름은 컨트롤러 전체에서 유일해야 하고, 비교 함수가 중복을 검사한다. 예약어 `delete`는 그대로 쓴다(생성기가 `_delete`로 바꾼다).
 2. **태그를 붙이지 않는다.** typescript-fetch는 태그마다 API 클래스를 나눠서 프론트 import가 전부 깨진다. `@nestjs/swagger`는 컨트롤러 이름으로 태그를 **자동으로 붙이므로**(시험에서 `FakeComment` 태그가 실제로 나왔다) `createDocument`에 `autoTagControllers: false`를 준다. [확인함] 옛 컨트롤러는 `@Operation(tags = "댓글 기능")` 같은 한글 태그를 `@Operation` 45개 중 32개에 붙였는데도 프론트에는 `DefaultApi`뿐이다. 한글만 있는 태그를 생성기가 지워서 기본 클래스로 모았을 가능성이 있지만 [미검증], 우리는 태그를 두지 않으므로 어느 쪽이든 `DefaultApi`가 되는 것이 기대값이다. 전체 생성기 diff(M8)로 확인한다.
-3. **제네릭 래퍼 이름을 명시한다.** Nest는 제네릭을 못 쓰므로 `common/dto/response-dto.ts`의 헬퍼(`ResponseDtoOf`, `ResponseDtoListOf`, `ResponseDtoPagedOf`, `ResponseDtoString`·`Long`·`Boolean`·`Void`)가 `ResponseDto${Model}` 이름의 클래스를 만들어 캐시한다. 응답 필드는 옛 springdoc 명세처럼 전부 선택(required 없음)이다. 같은 스키마 이름과 필드가 나오는 것을 M1-1 시험에서 확인했다. [확인함] 클래스 이름이 곧 스키마 이름이다.
+3. **제네릭 래퍼 이름을 명시한다.** Nest는 제네릭을 못 쓰므로 `common/swagger/response-schemas.ts`의 헬퍼(`ResponseDtoOf`, `ResponseDtoListOf`, `ResponseDtoPagedOf`, `ResponseDtoString`·`Long`·`Boolean`·`Void`)가 `ResponseDto${Model}` 이름의 클래스를 만들어 캐시한다. 응답 필드는 옛 springdoc 명세처럼 전부 선택(required 없음)이다. 같은 스키마 이름과 필드가 나오는 것을 M1-1 시험에서 확인했다. [확인함] 클래스 이름이 곧 스키마 이름이다.
 4. **응답 모양을 같게 한다.** `data` null 생략, `timestamp` epoch ms, 페이지 번호 0부터, 에러 `code` 문자열은 옛 `ErrorCode` 표를 그대로 옮긴다.
    - **HTTP 상태는 모두 200이다.** 옛 컨트롤러는 `ResponseEntity`도 `@ResponseStatus`도 쓰지 않아서, `ResponseDto.of(HttpStatus.CREATED, …)`를 돌려줘도 HTTP는 200이었고 본문 `status`만 201이었다. Nest는 POST를 201로 내므로 `@Ok(모델)` 데코레이터가 `@HttpCode(200)`과 문서의 200 응답을 **함께** 건다. 한쪽만 걸면 문서와 실제가 어긋난다. [확인함]
-   - 본문 `status`는 컨트롤러가 `ok(message, data, status)`로 넘기는 값이다. HTTP 상태와 별개다.
+   - 본문은 `common/response/ok.ts`의 `ok(message, data, status)`가 만들고, `status`는 컨트롤러가 넘기는 값이다. HTTP 상태와 별개다.
 5. **날짜 형식을 같게 한다.** 옛 코드는 `LocalDateTime`(12개 파일)이라 오프셋 없는 ISO일 가능성이 높지만 [미검증], 덤프와 실제 응답으로 확인한다.
 6. **검증은 두 단계로 한다.**
    - 가벼운 검사(CI에서 매번): Nest가 만든 `openapi.json`의 operationId, 메서드, 경로, 파라미터, 스키마 이름, **모델의 필드 이름과 타입**을 옛 계약과 비교한다. 옛 계약은 `extract-api.mjs`처럼 생성 코드(`DefaultApi.ts`와 모델 65개)를 `apps/server/scripts/extract-contract.mjs`로 읽어 `apps/server/contract/front-contract.json`에 저장해 둔다(operation 48개). `test/contract/diff-contract.ts`가 이것과 비교하고, 지금은 가짜 컨트롤러가 흉내 내는 작업 4개만 대상이다. 생성기가 예약어 이름에 붙이는 `_`(`delete` → `_delete`)는 비교할 때 뗀다. 비교 함수가 틀린 것을 실제로 잡는지도 시험한다. 기대하는 차이는 1절에서 뺀 13개 operation(과 그것만 쓰는 모델)뿐이고, 목록에 `deferred`로 표시해 둔다. Java가 필요 없다.

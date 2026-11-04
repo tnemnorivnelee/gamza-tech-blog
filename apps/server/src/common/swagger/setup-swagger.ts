@@ -1,6 +1,6 @@
 import type { INestApplication } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { Pageable } from '../dto/pageable.js';
+import { Pageable } from '../dto/pageable.dto.js';
 
 // 옛 springdoc 설정을 따른다: 그룹 `all`, 제목 "모든 API", `bearerAuth` 전역 적용, 명세 주소 /v3/api-docs/all.
 // operationId는 메서드 이름이다. 프론트 생성 클라이언트의 함수 이름이 여기서 나온다.
