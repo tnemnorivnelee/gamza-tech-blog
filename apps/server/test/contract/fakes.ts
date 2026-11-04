@@ -1,14 +1,15 @@
 import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam } from '@nestjs/swagger';
 import { Test } from '@nestjs/testing';
-import { ok } from '../../src/common/response/ok.js';
-import { ApiPageable, Ok } from '../../src/common/swagger/api-decorators.js';
+import { PagedResponse } from '../../src/common/dto/paged-response.dto.js';
 import {
   ResponseDtoOf,
   ResponseDtoPagedOf,
   ResponseDtoString,
   ResponseDtoVoid,
-} from '../../src/common/swagger/response-schemas.js';
+} from '../../src/common/dto/response-schema.factory.js';
+import { ResponseDto } from '../../src/common/dto/response.dto.js';
+import { ApiPageable, Ok } from '../../src/common/swagger/api-decorators.js';
 import { setupSwagger } from '../../src/common/swagger/setup-swagger.js';
 import { CommentListResponse } from '../../src/modules/comment/dto/comment-list-response.dto.js';
 import { CommentRequest } from '../../src/modules/comment/dto/comment-request.dto.js';
@@ -26,7 +27,7 @@ class FakeCommentController {
   @ApiParam({ name: 'postId', ...int64 })
   @ApiBody({ type: CommentRequest })
   addComment(@Param('postId') postId: string, @Body() body: CommentRequest) {
-    return ok(
+    return ResponseDto.of(
       '댓글이 등록되었습니다.',
       { commentId: Number(postId), content: body.content },
       201,
@@ -38,7 +39,7 @@ class FakeCommentController {
   @Ok(ResponseDtoString)
   @ApiParam({ name: 'commentId', ...int64 })
   deleteComment() {
-    return ok('댓글이 삭제되었습니다.');
+    return ResponseDto.of('댓글이 삭제되었습니다.');
   }
 
   @ApiOperation({ summary: '내가 단 댓글 목록 조회' })
@@ -46,13 +47,10 @@ class FakeCommentController {
   @ApiPageable()
   @Ok(ResponseDtoPagedOf(CommentListResponse))
   getMyComments() {
-    return ok('내가 단 댓글 목록 조회 성공', {
-      content: [],
-      page: 0,
-      size: 20,
-      totalElements: 0,
-      totalPages: 0,
-    });
+    return ResponseDto.of(
+      '내가 단 댓글 목록 조회 성공',
+      new PagedResponse<CommentListResponse>([], 0, 20, 0, 0),
+    );
   }
 }
 
@@ -64,7 +62,7 @@ class FakeAdmissionController {
   @Ok(ResponseDtoVoid)
   @ApiParam({ name: 'admissionId', ...int64 })
   delete() {
-    return ok('합격/불합격 결과가 삭제되었습니다.');
+    return ResponseDto.of('합격/불합격 결과가 삭제되었습니다.');
   }
 }
 

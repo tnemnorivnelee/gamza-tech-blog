@@ -2,10 +2,11 @@ import type { Type } from '@nestjs/common';
 import { ApiPropertyOptional, type ApiPropertyOptions } from '@nestjs/swagger';
 
 // 이 파일의 클래스는 응답을 만드는 용도가 아니라 OpenAPI 명세에 스키마 이름을 남기는 용도다.
-// 실제 응답 본문은 common/response/ok.ts의 ok()가 만든다.
+// 실제 응답은 ResponseDto / PagedResponse가 만든다. 필드는 그 두 클래스와 같게 유지한다.
 //
 // 옛 자바는 제네릭 ResponseDto<T>에서 springdoc이 ResponseDtoXxx 이름을 자동으로 지었다.
 // TypeScript는 실행 시점에 제네릭이 사라져서, 같은 이름의 클래스를 직접 만든다.
+// 이름을 지키는 이유: 프론트의 생성 클라이언트가 이 이름을 쓴다(계약 비교 시험이 지킨다).
 
 const int32: ApiPropertyOptions = { type: 'integer', format: 'int32' };
 const int64: ApiPropertyOptions = { type: 'integer', format: 'int64' };
