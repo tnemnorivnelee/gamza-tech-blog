@@ -1,6 +1,10 @@
 import { readFileSync } from 'node:fs';
 import type { INestApplication } from '@nestjs/common';
-import type { OpenAPIObject, SchemaObject } from '@nestjs/swagger';
+import type {
+  OpenAPIObject,
+  ResponseObject,
+  SchemaObject,
+} from '@nestjs/swagger';
 import { type Contract, diffContract } from './diff-contract.js';
 import { createFakeApp } from './fakes.js';
 
@@ -18,6 +22,12 @@ const contract = JSON.parse(
 const TRIAL = {
   operations: ['addComment', 'deleteComment', 'getMyComments', 'delete'],
   models: ['Pageable'],
+};
+
+const addCommentResponse = (doc: OpenAPIObject) => {
+  const response = doc.paths['/api/v1/comment/{postId}/comments'].post!
+    .responses['200'] as ResponseObject;
+  return response.content!['application/json'].schema as SchemaObject;
 };
 
 describe('OpenAPI 계약', () => {
@@ -64,7 +74,38 @@ describe('OpenAPI 계약', () => {
       const bad = structuredClone(doc);
       bad.paths['/api/v1/comment/{commentId}'].delete!.tags = ['댓글 기능'];
       const problems = diffContract(contract, bad, TRIAL);
-      expect(problems.join('\n')).toContain('deleteComment: 태그가 다르다');
+      expect(problems.join('\n')).toContain('deleteComment: 태그 불일치');
+    });
+
+    it('title이 없는 응답(생성기가 모델 이름을 못 정한다)', () => {
+      const bad = structuredClone(doc);
+      delete addCommentResponse(bad).title;
+      const problems = diffContract(contract, bad, TRIAL);
+      expect(problems.join('\n')).toContain(
+        'addComment: 200 응답 모델 이름 불일치',
+      );
+    });
+
+    it('공통 껍데기(ResponseDto)에서 빠진 필드', () => {
+      const bad = structuredClone(doc);
+      const base = bad.components?.schemas?.ResponseDto as SchemaObject;
+      delete base.properties?.message;
+      const problems = diffContract(contract, bad, TRIAL);
+      expect(problems.join('\n')).toContain(
+        'ResponseDtoCommentResponse: 필드가 다르다',
+      );
+    });
+
+    it('data 자리에 엉뚱한 모델이 적힌 응답', () => {
+      const bad = structuredClone(doc);
+      const part = addCommentResponse(bad).allOf?.[1] as SchemaObject;
+      part.properties = {
+        data: { $ref: '#/components/schemas/CommentListResponse' },
+      };
+      const problems = diffContract(contract, bad, TRIAL);
+      expect(problems.join('\n')).toContain(
+        'ResponseDtoCommentResponse.data: 타입이 다르다',
+      );
     });
   });
 

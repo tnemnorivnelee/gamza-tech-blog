@@ -2,14 +2,14 @@ import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam } from '@nestjs/swagger';
 import { Test } from '@nestjs/testing';
 import { PagedResponse } from '../../src/common/dto/paged-response.dto.js';
-import {
-  ResponseDtoOf,
-  ResponseDtoPagedOf,
-  ResponseDtoString,
-  ResponseDtoVoid,
-} from '../../src/common/dto/response-schema.factory.js';
 import { ResponseDto } from '../../src/common/dto/response.dto.js';
-import { ApiPageable, Ok } from '../../src/common/swagger/api-decorators.js';
+import {
+  ApiPageable,
+  OkOf,
+  OkPagedOf,
+  OkString,
+  OkVoid,
+} from '../../src/common/swagger/api-decorators.js';
 import { setupSwagger } from '../../src/common/swagger/setup-swagger.js';
 import { CommentListResponse } from '../../src/modules/comment/dto/comment-list-response.dto.js';
 import { CommentRequest } from '../../src/modules/comment/dto/comment-request.dto.js';
@@ -23,7 +23,7 @@ const int64 = { type: 'integer', format: 'int64' } as const;
 class FakeCommentController {
   @ApiOperation({ summary: '게시물에 댓글 등록' })
   @Post(':postId/comments')
-  @Ok(ResponseDtoOf(CommentResponse))
+  @OkOf(CommentResponse)
   @ApiParam({ name: 'postId', ...int64 })
   @ApiBody({ type: CommentRequest })
   addComment(@Param('postId') postId: string, @Body() body: CommentRequest) {
@@ -36,7 +36,7 @@ class FakeCommentController {
 
   @ApiOperation({ summary: '댓글 삭제' })
   @Delete(':commentId')
-  @Ok(ResponseDtoString)
+  @OkString()
   @ApiParam({ name: 'commentId', ...int64 })
   deleteComment() {
     return ResponseDto.of('댓글이 삭제되었습니다.');
@@ -45,7 +45,7 @@ class FakeCommentController {
   @ApiOperation({ summary: '내가 단 댓글 목록 조회' })
   @Get('me/comments')
   @ApiPageable()
-  @Ok(ResponseDtoPagedOf(CommentListResponse))
+  @OkPagedOf(CommentListResponse)
   getMyComments() {
     return ResponseDto.of(
       '내가 단 댓글 목록 조회 성공',
@@ -59,7 +59,7 @@ class FakeAdmissionController {
   // 메서드 이름이 예약어 `delete`다. 생성기는 이것을 `_delete`로 바꾼다.
   @ApiOperation({ summary: '합격/불합격 결과 삭제 (ADMIN)' })
   @Delete('admin/:admissionId')
-  @Ok(ResponseDtoVoid)
+  @OkVoid()
   @ApiParam({ name: 'admissionId', ...int64 })
   delete() {
     return ResponseDto.of('합격/불합격 결과가 삭제되었습니다.');
