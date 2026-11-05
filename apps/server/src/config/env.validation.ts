@@ -1,4 +1,4 @@
-// class-transformer의 자동 형 변환이 Reflect 메타데이터를 쓴다.
+// class-transformer가 문자열을 숫자로 바꿀 때 Reflect 메타데이터(필드의 타입 정보)를 읽는다.
 import 'reflect-metadata';
 import { plainToInstance, Transform } from 'class-transformer';
 import {
@@ -16,8 +16,8 @@ import {
   validateSync,
 } from 'class-validator';
 
-// Base64로 풀었을 때의 바이트 수를 센다. 문자 수로는 모자라다(44자가 '=='로 끝나면 31바이트다).
-// 메시지에 값을 넣지 않는다. 비밀값이 이 검증을 지나간다.
+// 직접 만든 검사 규칙. 필드에 @Validate(MinDecodedBytes, [32])처럼 붙이면 validate가 true일 때 통과다.
+// Base64로 풀었을 때의 바이트 수를 센다(글자 수로는 모자란다: 44자가 '=='로 끝나면 31바이트).
 @ValidatorConstraint({ name: 'minDecodedBytes' })
 class MinDecodedBytes implements ValidatorConstraintInterface {
   validate(value: unknown, args: ValidationArguments) {
@@ -27,11 +27,14 @@ class MinDecodedBytes implements ValidatorConstraintInterface {
     );
   }
 
+  // 실패 메시지. 비밀값이 이 검증을 지나가므로 값은 넣지 않는다.
   defaultMessage(args: ValidationArguments) {
     return `${args.property}는 Base64로 풀었을 때 ${String(args.constraints[0])}바이트 이상이어야 합니다`;
   }
 }
 
+// 필드 위의 @IsInt, @Min 같은 데코레이터는 "이 필드는 이런 값이어야 한다"는 검사 규칙을 붙인다(zod 스키마와 비슷하다).
+// 등호 뒤의 값은 환경변수가 없을 때 쓰는 기본값이다.
 export class EnvironmentVariables {
   @IsIn(['development', 'test', 'production'])
   NODE_ENV: 'development' | 'test' | 'production' = 'development';
@@ -41,22 +44,20 @@ export class EnvironmentVariables {
   @Max(65535)
   PORT: number = 3000;
 
-  // 명세의 servers 항목. 프론트 생성 클라이언트의 BASE_PATH가 여기서 나온다(옛 openapi.server-url).
-  // 비워 두면 항목을 내보내지 않는다.
+  // API 명세의 servers 주소. 프론트 gen:api의 BASE_PATH가 여기서 나온다. 비워 두면 생략한다.
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : value))
   @IsUrl({ require_protocol: true, require_tld: false })
   OPENAPI_SERVER_URL?: string;
 
-  // JWT 서명 키(HS256). 옛 jjwt는 Base64로 푼 바이트를 키로 썼고 256비트(32바이트) 미만을 거부했다.
-  // jsonwebtoken은 HMAC 키 길이를 검사하지 않으므로(RSA만 검사한다) 여기가 유일한 방어선이다.
-  // IsBase64는 글자 종류를 막는다. Buffer.from은 틀린 글자를 조용히 건너뛰기 때문이다.
+  // JWT 서명 키. jsonwebtoken은 HMAC 키 길이를 검사하지 않아서 여기가 유일한 방어선이다.
+  // IsBase64는 글자 종류를, MinDecodedBytes는 푼 길이를 막는다(Buffer.from은 틀린 글자를 조용히 건너뛴다).
   @IsBase64()
   @Validate(MinDecodedBytes, [32])
   JWT_SECRET: string;
 
-  // 옛 기본값: 액세스 1시간, 리프레시 30일. jsonwebtoken은 숫자를 초로, 숫자 문자열을 밀리초로 읽는다.
-  // 환경변수는 문자열로 들어오므로 반드시 숫자로 바꿔 써야 한다(아래 enableImplicitConversion이 해 준다).
+  // 토큰 수명(초). jsonwebtoken은 숫자는 초로, 숫자 문자열은 밀리초로 읽는다.
+  // 환경변수는 문자열이라 아래 enableImplicitConversion이 숫자로 바꿔 준다.
   @IsInt()
   @Min(1)
   ACCESS_TOKEN_TTL_SECONDS: number = 3600;
@@ -66,11 +67,12 @@ export class EnvironmentVariables {
   REFRESH_TOKEN_TTL_SECONDS: number = 2592000;
 }
 
-// 부팅 때 한 번 실행한다. 잘못된 값이 있으면 서버를 띄우지 않는다.
-// 오류 메시지에는 값을 넣지 않는다(나중에 비밀값이 이 검증을 지나가기 때문).
+// 부팅 때 한 번 실행된다(ConfigModule이 부른다). 환경변수 객체를 EnvironmentVariables로 바꿔 규칙대로 검사하고,
+// 어긋나면 서버를 띄우지 않는다. 오류 메시지에는 값을 넣지 않는다.
 export function validateEnv(
   config: Record<string, unknown>,
 ): EnvironmentVariables {
+  // enableImplicitConversion: 필드 타입(number 등)에 맞춰 문자열을 자동으로 바꾼다.
   const env = plainToInstance(EnvironmentVariables, config, {
     enableImplicitConversion: true,
   });
