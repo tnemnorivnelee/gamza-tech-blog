@@ -38,7 +38,7 @@ Before writing code, walk this ladder. Stop at the first answer that works.
 ## Languages
 
 - Commit messages, issue and PR titles and bodies, and everything in `docs/`: Korean.
-- Code comments: Korean, explaining why rather than what (match the existing files). Identifiers: English.
+- Code comments: Korean. The maintainer is learning NestJS, so give each NestJS construct (decorator, module, provider, injection, filter, guard) a one- or two-line comment on how it works, in frontend terms where that helps. Keep short comments for non-obvious reasons and pitfalls. Do not comment obvious lines or repeat what a document already says. Identifiers: English.
 - `AGENTS.md` and `CLAUDE.md`: English.
 
 ## Project structure
