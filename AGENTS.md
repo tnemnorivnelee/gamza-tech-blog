@@ -56,7 +56,7 @@ apps/server/test/    tests that start an HTTP app (contract/, error/)
 apps/server/contract/front-contract.json
                      snapshot of the frontend's generated client; regenerate with
                      apps/server/scripts/extract-contract.mjs <frontend>/src/generated/api
-docs/                backend-plan.md, infra-notes.md, porting-principle.md
+docs/                backend-plan.md, infra-notes.md, porting-principle.md, m2-auth-plan.md, improvement-candidates.md
 ```
 
 ## Commands

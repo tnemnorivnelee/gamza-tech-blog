@@ -99,10 +99,10 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
 [확정] JWT(HS256), 쿠키 `authorization`(httpOnly=false)과 `refreshToken`(httpOnly), `exp` 클레임 필수, `/api/auth/reissue`는 Set-Cookie 배열 응답, 저장소는 Redis, 쿠키 도메인은 `.gamza.xyz`(환경변수).
 
 **② 로그아웃·세션** [이식]
-- **블랙리스트 유지.** 로그아웃하면 그 액세스 토큰의 남은 유효 시간만큼 Redis에 등록하고, 요청마다 조회한다. 공개 GET은 옛 동작처럼 검사를 건너뛴다.
+- **블랙리스트 유지.** 로그아웃하면 그 액세스 토큰의 남은 유효 시간만큼 Redis에 등록하고, 요청마다 조회한다. 공개 GET은 옛 동작처럼 검사를 건너뛴다. 로그아웃은 리프레시 토큰(Redis 키 두 개)도 함께 지운다. 블랙리스트에 오르는 것은 헤더(`ACCESS`, `Authorization`)에서 읽은 토큰뿐이다.
 - **한 기기만 로그인(옛 동작 그대로).** 옛 코드는 사용자당 활성 리프레시 토큰이 하나다(`refresh:<token>` → userId, `userRefresh:<userId>` → token). 다른 기기에서 로그인하면 이전 토큰이 무효가 된다. 옛 코드가 이 교체를 Lua 스크립트로 한 번에 처리했으므로 같은 방식으로 옮긴다. 구형 키를 위한 대체 경로는 새 Redis에 구형 데이터가 없어 옮기지 않는다.
 - **리프레시 토큰은 옛 형식(JWT, 30일).** 옛 `reissue`는 Redis에 있는지만 확인한다. 이 동작도 그대로 옮긴다.
-- **갱신 방식도 그대로.** `reissue`는 액세스 토큰만 새로 주고 리프레시 만료를 30일로 연장한다(슬라이딩). 로테이션은 없다.
+- **갱신 방식도 그대로.** `reissue`는 액세스 토큰만 새로 주고 리프레시 만료를 30일로 연장한다(슬라이딩). 로테이션은 없다. 연장되는 것은 Redis의 만료뿐이다. 리프레시 쿠키는 다시 내려주지 않아서 브라우저의 쿠키 수명은 로그인 때 정해진 30일 그대로다.
 - 참고: 새 Redis는 비어 있고 JWT 시크릿도 바꿀 예정이라 전환 날 모든 사용자가 한 번 다시 로그인한다.
 
 **③ GitHub 로그인**
@@ -131,7 +131,7 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
 
 - **챗봇** [이식]: 옛 코드는 메시지 2000자 초과를 거부하고, Gemini 응답을 Redis에 TTL을 두고 캐시한다. 키와 TTL은 옛 `GamzaChatService`에서 그대로 옮긴다.
 - **챗봇 요청 횟수 제한은 이식하지 않는다.** 옛 설정에 20회/60초 값이 있지만 설정 파일과 프로퍼티 클래스에만 있고 읽는 코드를 찾지 못했다 [미검증]. 적용되지 않던 설정으로 보인다. 횟수 제한은 새 기능이라 이식이 끝난 뒤 따로 논의한다.
-- **CORS·쿠키** [이식]: 허용 출처를 환경변수로 받고(`blog.gamza.xyz`와 로컬) `credentials: true`. 쿠키는 `cookie-parser`로 읽고 `Secure`, `SameSite=Lax`, 도메인은 환경변수.
+- **CORS·쿠키** [이식]: 허용 출처를 환경변수로 받고(`blog.gamza.xyz`와 로컬) `credentials: true`. 쿠키는 `cookie-parser`로 읽고 `Secure`, 액세스 쿠키는 `SameSite=Lax`, 리프레시 쿠키는 `SameSite=None`, 도메인은 환경변수.
 - **프록시 신뢰 설정은 넣지 않는다** [제안]: 옛 앱도 포워딩 헤더 설정이 없었고 쿠키의 Secure를 고정으로 썼다. `res.cookie`로 직접 설정하면 요청이 HTTP로 들어와도 Secure 속성이 붙는다. 세션 라이브러리를 쓰게 되면 다시 본다.
 - **이미지 업로드** [이식]: 옛 검증을 그대로 옮긴다. 확인한 값은 프로필 이미지 기준으로 확장자 jpg·jpeg·png·gif, 최대 3MB(멀티파트 설정도 3MB)다. 글 이미지의 검증은 옛 `PostImageServiceUtil` 등을 읽고 맞춘다 [미검증].
 - **이미지 저장소** [제안]: `ImageStorage` 인터페이스 뒤에 두고, 구현은 S3 호환 클라이언트(`@aws-sdk/client-s3`, endpoint는 환경변수)로 한다. 옛 이미지 URL이 이미 S3를 가리키고, 저장소 종류는 인프라 단계에서 정해도 코드가 같다.
@@ -140,12 +140,13 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
   - 본문 검증 실패 → 400 `C001`과 필드별 오류(`ValidationFailedException`), 경로·쿼리 타입 불일치 → 400 `C005`(`ArgumentTypeMismatchException`). 던지는 쪽(검증 파이프)은 첫 검증이 필요한 컨트롤러를 옮길 때 연결한다. null 값은 빈 문자열로 나간다.
   - 그 밖의 모든 예외 → 500 `C004`. 원인은 응답에 싣지 않고 로그에만 남긴다. Nest 내부의 `HttpException`(없는 경로, 잘못된 JSON 등)도 여기로 간다(옛 catch-all이 그랬다). 그래서 가드·파이프도 `HttpException` 대신 `BusinessException`을 던진다.
   - **알려진 차이**: 옛 서버는 잘못된 HTTP 메서드에 405 `C002`를 줬지만 Express는 이를 없는 경로와 구별하지 못해 500 `C004`가 나간다. 옛 처리기의 `AccessDeniedException` 분기는 Spring Security가 아니라 `java.nio.file`의 것을 잘못 import해서 실제로는 동작하지 않았으므로 옮기지 않았다.
-  - **인증 실패(401/403) 응답**은 이 처리기가 아니라 옛 `SecurityConfig`의 진입점과 거부 처리기가 만들었다. 인증(M2)에서 그 코드를 읽고 옮긴다.
+  - **알려진 차이**: 토큰 없이 없는 경로나 잘못된 메서드를 부르면 옛 필터가 라우팅보다 먼저 돌아 403 `J004`를 줬다. Nest 가드는 맞는 라우트에서만 돌아서 500 `C004`가 나간다. 위의 "없는 경로 → 500"은 토큰이 있는 요청에 해당한다(`m2-auth-plan.md` 5절).
+  - **인증 실패 응답**은 이 처리기가 아니라 옛 `JwtAuthenticationEntryPoint`가 `ResponseDto` 모양(`data`에 코드 문자열)으로 만들었다. 옛 `SecurityConfig`에는 접근 거부 처리기가 없어서, role이 안 맞는 로그인 사용자의 응답은 확인하지 못했다. 자세한 내용은 `docs/m2-auth-plan.md` 3.2와 5절.
 - **예약 작업** [이식]: 임시 이미지 정리(`TempImageCleanupScheduler`)는 `@nestjs/schedule`로 옮긴다. 주기와 규칙은 옛 코드를 읽고 맞춘다.
 
 ## 9. 테스트와 CI
 
-- **접근 규칙 표 테스트**: 옛 분류 결과(`api-access.json`)를 입력으로, 각 경로가 공개/로그인/ADMIN/특수 규칙대로 동작하는지 표 기반으로 검사한다. 값싸고 실수를 가장 잘 잡는다.
+- **접근 규칙 표 테스트**: 옛 `SecurityConfig`와 `JwtSkipPathMatcher`를 계약 48개에 적용한 분류(데이터 파일은 M2-2에서 만든다)를 입력으로, 각 경로가 공개/로그인/ADMIN/특수 규칙대로 동작하는지 표 기반으로 검사한다. 값싸고 실수를 가장 잘 잡는다.
 - **단위 테스트**: 토큰 서비스(Redis는 가짜로 대체), 인증 가드, 에러 변환.
 - **계약 검사**: 5절의 가벼운 diff를 CI에서 돌린다.
 - **e2e**: supertest와 실제 MySQL·Redis. GitHub Actions의 서비스 컨테이너를 쓰면 로컬 Docker 없이도 CI에서 돌릴 수 있다.
@@ -163,7 +164,7 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
 **A. 지금 시작 가능 (덤프 불필요. 단 M2~M3의 사용자 저장은 M4 이후에 연결)**
 - **M0** 레포 생성(승인 후), 스켈레톤, lint/test/build CI, 환경변수 검증
 - **M1** 가장 큰 위험(계약)을 맨 앞에 둔다. **M1-1** 응답 래퍼, Swagger 설정, 가짜 컨트롤러로 계약 diff 시험(통과). **M1-2** `ErrorCode`와 전역 예외 필터(통과)
-- **M2** 인증: JWT, `TokenStore`(Redis), 쿠키, reissue·logout, 가드, 접근 규칙 표 테스트. 가드가 role을 `UserRepository`로 읽으므로 **인메모리 구현으로 개발**한다.
+- **M2** 인증: JWT, `TokenStore`(Redis), 쿠키, reissue·logout, 가드, 접근 규칙 표 테스트. 가드가 role을 `UserRepository`로 읽으므로 **인메모리 구현으로 개발**한다. 상세 계획은 `docs/m2-auth-plan.md`.
 - **M3** GitHub 로그인 (새 OAuth 앱 필요). 콜백이 사용자를 찾거나 PRE_REGISTER로 만드는 부분은 `UserRepository`까지만 만들고, 실제 저장은 M4 뒤에 연결한다.
 
 **B. 덤프를 받은 뒤**
@@ -206,8 +207,8 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
 | openapi-generator가 이름 없는 응답 스키마의 `title`을 모델 이름으로 쓰는지(안 쓰면 프론트 타입 이름이 바뀐다, 15절) | M8 |
 | 같은 `title`의 이름 없는 스키마가 여러 작업에서 쓰일 때 하나의 모델로 합쳐지는지(`PagedResponsePostListResponse`는 여러 API가 공유한다) | M8 |
 | 생성기가 `allOf` 응답을 TypeScript로 어떻게 만드는지(`extends`, 교차 타입 등)와 프론트가 그대로 컴파일되는지 | M8 |
-| ADMIN 부여 지점 | M2 |
-| 옛 `SecurityConfig` 진입점·거부 처리기가 만드는 401/403 응답 본문 | M2 |
+| ADMIN 부여 경로(코드에는 없다. DB에 직접 넣은 것으로 추정) | M4 덤프 |
+| role이 안 맞는 로그인 사용자의 응답 본문(진입점 본문은 확인함. 거부 처리기는 설정에 없어서 403 `J005` `ResponseDto` 모양으로 추정해 구현한다) | 덤프·운영 로그가 있으면 |
 | 옛 서버가 없는 경로·잘못된 JSON에 실제로 500을 줬는지(코드만 읽고 내린 판단이라 운영 중 응답은 못 봤다) | 덤프·운영 로그가 있으면 |
 | 옛 GitHub 로그인 스코프(암호문)와 성공 후 리다이렉트 규칙 | M3 |
 | Prisma 7의 MySQL `db pull` 품질, v7 고정 | M4 |
