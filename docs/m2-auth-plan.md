@@ -38,7 +38,11 @@
 
 ### 3.2 요청 한 건이 지나는 길
 1. 공개 경로면 검사를 건너뛴다(로그인한 사용자가 보내도 사용자 정보가 붙지 않는다).
-2. 토큰을 찾는다. 순서: 쿠키 `accessToken` 또는 `authorization`(값 그대로) → 헤더 `ACCESS` → 헤더 `Authorization`(`Bearer ` 필수). 프론트는 쿠키 값을 `Authorization: Bearer`로 같이 보낸다.
+2. 토큰을 찾는다. 순서: 쿠키 → 헤더 `ACCESS` → 헤더 `Authorization`. 세부 규칙(옛 `JwtTokenValidator`·`JwtProvider`에서 확인함):
+   - 쿠키는 `Cookie` 헤더에 적힌 순서대로 훑는다. 이름이 `accessToken` 또는 `authorization`이고 **값이 비어 있지 않은 첫 쿠키**가 이긴다. 빈 값은 건너뛰고 계속 본다. 값은 그대로 쓴다(`Bearer`를 떼지 않는다).
+   - 쿠키가 하나라도 맞으면 헤더에 다른 토큰이 있어도 쿠키가 이긴다.
+   - 헤더 `ACCESS`와 `Authorization`은 **둘 다** 값이 `Bearer `(대소문자 구분)로 시작해야 한다. 아니면 오류가 아니라 없는 것으로 보고 다음 후보로 넘어간다. 그래서 접두어 없이 `ACCESS: <토큰>`만 보내면 403 `J004`다.
+   - 프론트는 쿠키 값을 `Authorization: Bearer`로 같이 보낸다.
 3. 서명·만료를 본다 → 블랙리스트에 있는지 본다 → `githubId`로 DB에서 사용자를 찾아 role을 얻는다 → 경로의 role 규칙과 맞춘다.
 
 실패 응답(HTTP 상태 · 본문의 `data`에 담기는 코드):
@@ -54,6 +58,7 @@
 - Redis에 그 토큰이 없으면: 403 · `J004`. 이쪽은 `BusinessException`이라 일반 에러 모양(`ErrorResponse`)이다. 3.2의 실패와 모양이 다르다.
 - 있으면: 새 액세스 토큰을 만들고 Redis의 리프레시 만료를 30일로 다시 늘린다. 본문 `{authorization: 새 토큰}`, 메시지 "토큰 재발급 성공". Set-Cookie는 **`authorization` 하나뿐**이다.
 - 리프레시 JWT 자체는 검증하지 않고 Redis에 있는지만 본다. 사용자가 아직 DB에 있는지도 보지 않는다.
+- 리프레시 쿠키는 `@CookieValue("refreshToken")`으로 읽는다. 값을 그대로 쓰고 `Bearer`를 떼지 않는다(액세스 토큰 헤더와 다르다).
 - 리프레시 **쿠키는 다시 내려주지 않는다.** 그래서 브라우저의 쿠키 수명은 로그인 때 정해진 30일 그대로이고, "연장"은 Redis 쪽에서만 일어난다.
 - 프론트 `proxy.ts`는 응답이 2xx이고 Set-Cookie가 있어야 성공으로 본다.
 
@@ -109,7 +114,7 @@ apps/server/src/
 - `UserRepository`는 M2에서 `findByGithubId`만 가진다. M3·M4에서 필요한 메서드를 그때 더한다.
 - `TokenStore`가 하는 일: 리프레시 교체(Lua), 리프레시 조회, 만료 연장, 사용자 토큰 삭제, 블랙리스트 등록, 블랙리스트 조회.
 - 새 환경변수(검증과 `.env.example`에 같이 추가): `JWT_SECRET`(Base64, 풀었을 때 32바이트 이상), 액세스·리프레시 수명(**초 단위 정수**로 받아 단위 변환 코드를 없앤다), `COOKIE_DOMAIN`, Redis 접속 정보.
-- 새 의존성: `@nestjs/jwt`(`12.0.3`, `@nestjs/common ^12` 호환 확인함), `cookie-parser`(`1.4.7`, peer 의존성 없음 확인함. Express 5에는 쿠키 읽기 기능이 없다), Redis 클라이언트(6절 D2).
+- 새 의존성: `@nestjs/jwt`(`12.0.3`, `@nestjs/common ^12` 호환 확인함), Redis 클라이언트(6절 D2). 쿠키는 읽기용 라이브러리 없이 `Cookie` 헤더를 직접 읽는다(6절 D6). 쿠키를 내려주는 것은 Express 내장 `res.cookie`로 한다.
 
 ## 5. 알려진 차이와 미검증
 
@@ -127,14 +132,15 @@ apps/server/src/
 - **D3. 임시 구현을 어디에 두나.** **[확정 2026-11-05]** `src`에 인메모리 구현을 기본으로 두고 `shortcut:` 주석으로 M4 교체를 적는다. `backend-plan.md` 4절은 "Nest provider override로 인메모리 구현을 끼운다"고 제안했는데, 시험에서만 끼우면 가드가 `UserRepository`를 주입받는 M2-2부터 M4까지 `yarn dev`가 뜨지 않아서 M3의 OAuth 확인이 막힌다. 비교한 안: 시험에서만 끼움(서버가 안 뜸), `src`에 두되 `NODE_ENV=production`이면 시작 거부(교체를 잊는 위험을 코드로 막지만 분기가 늘고, 배포할 서버가 아직 없어 위험이 작다). 제약: M2 동안에는 사용자를 만드는 기능이 없어 인메모리 저장소가 비어 있으므로, 서버를 띄워 직접 로그인해 볼 수는 없고 시험으로 검증한다. 교체를 잊지 않도록 M4 시작 때 `shortcut:` 주석을 `grep`으로 모아 확인한다.
 - **D4. Redis 구현을 어떻게 시험하나.** 이 컴퓨터에는 Docker가 없다(오늘 다시 확인함). 후보: (a) GitHub Actions의 서비스 컨테이너에서만 돌린다, (b) Docker Desktop을 설치해 로컬과 CI에서 돌린다, (c) Redis 모조품 라이브러리를 쓴다(진짜 Redis가 아니라 Lua 동작을 보장하지 못한다). D2에 따라 달라진다.
 - **D5. 작업 분할(7절).** **[확정 2026-11-05]** 4개로 간다. 비교한 안: 1개(가장 늦게 정해지는 결정에 전부 막힘), 3개(M2-1과 M2-2를 합침, 첫 PR이 D1까지 기다림), 4개. 결정이 풀리는 순서대로 진행할 수 있어서 4개로 정했다.
+- **D6. 쿠키를 읽는 방법.** **[확정 2026-11-06]** 가드 안에서 `Cookie` 헤더를 직접 읽는다(`access-token.ts`). 처음 계획은 `cookie-parser`였지만, 가드가 M2-3보다 먼저(M2-2) 쿠키를 읽게 되어 다시 정했다. 비교한 안: `cookie-parser`(쿠키를 객체로 바꿔서 이름 두 개 사이의 순서와 빈 값 건너뛰기를 잃고, `main.ts`에 등록하면 시험 앱에는 적용되지 않아 시험과 운영의 설정이 어긋남), `cookie` 패키지를 직접 선언(Express가 이미 쓰지만 결과가 객체라 같은 한계), 직접 읽기(약 10줄, 새 패키지 없음, 옛 동작을 그대로 만들 수 있음). 제약: 옛 `JwtTokenValidator`가 쿠키를 헤더에 적힌 순서대로 훑어 값이 있는 첫 `accessToken`/`authorization`을 쓴다(3.2).
 
 ## 7. 작업 분할 [제안]
 
 각각 이슈 → 브랜치 → PR이고, 모두 `lint`·`typecheck`·`test`·`build`를 통과해야 한다.
 
 1. **M2-1 토큰과 사용자 조회**: 환경변수 검증 추가, `@nestjs/jwt`로 발급·검증, `UserRepository`(인터페이스 + 임시 구현), `JwtAuthenticationException`과 필터 분기. 시험: 클레임 모양, 만료·서명 오류, 예외 본문이 `ErrorResponse`와 다른 모양인 것.
-2. **M2-2 가드와 접근 규칙**: `TokenStore`(인터페이스 + 인메모리), 전역 가드, 데코레이터, 토큰 찾는 순서(3.2)와 실패 4종(코드와 상태), 접근 규칙 표(`test/access/`). 표는 옛 분류 48개를 입력으로 하고 지금 등록된 라우트만 검사한다. 계약 시험처럼 컨트롤러를 옮길 때마다 범위를 넓힌다.
-3. **M2-3 reissue·logout**: 컨트롤러, 쿠키 설정(3.5), `cookie-parser`, 3.3·3.4의 세부 동작 시험(HTTP 200인데 본문 401인 경우, 헤더만 블랙리스트에 오르는 경우 포함). 계약 비교 범위에 `reissue`(`ResponseDtoAccessTokenResponse`)와 `logout`(`ResponseDtoString`)을 추가하는 것이 이 PR의 확장 단계다.
+2. **M2-2 가드와 접근 규칙**: `TokenStore`(인터페이스 + 인메모리, 블랙리스트 두 메서드만. 나머지는 M2-3·M3·M2-4에서 필요해질 때 더한다), 전역 가드, 데코레이터, 토큰 찾는 순서(3.2)와 실패 4종(코드와 상태), 접근 규칙 표(`test/access/`). 표는 옛 분류 48개를 입력으로 하고 지금 등록된 라우트만 검사한다. 계약 시험처럼 컨트롤러를 옮길 때마다 범위를 넓힌다.
+3. **M2-3 reissue·logout**: 컨트롤러, 쿠키 설정(3.5)과 리프레시 쿠키 읽기(D6의 함수를 재사용), 3.3·3.4의 세부 동작 시험(HTTP 200인데 본문 401인 경우, 헤더만 블랙리스트에 오르는 경우 포함). 계약 비교 범위에 `reissue`(`ResponseDtoAccessTokenResponse`)와 `logout`(`ResponseDtoString`)을 추가하는 것이 이 PR의 확장 단계다.
 4. **M2-4 Redis `TokenStore`**: D2에서 고른 클라이언트로 구현, Lua 교체 스크립트, D4에서 고른 방식의 시험.
 
 ## 8. backend-plan.md 정정 [확인한 사실 기준]
