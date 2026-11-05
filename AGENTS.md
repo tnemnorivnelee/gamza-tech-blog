@@ -4,15 +4,28 @@ This repository rebuilds the GamzaTechBlog backend with NestJS so that it serves
 
 `docs/backend-plan.md` (Korean) is the source of truth for decisions, structure, and milestones. Read the relevant sections before starting a task. `docs/infra-notes.md` (Korean) records infrastructure facts that are not visible in code. Keep progress and status in those docs, not in this file.
 
-## Porting principle (highest priority)
+## Porting principle (Phase 1, highest priority)
 
-Phase 1 reproduces the old backend's behavior as-is.
+Phase 1 reproduces the old backend's behavior as-is. Read `docs/porting-principle.md` (Korean) before every task during Phase 1.
 
-- Verify the behavior in the old repository (`potato-club/GamzaTechBlog-back`, branch `master`) before porting it. The frontend's generated client (`src/generated/api` in the frontend repository) is the final arbiter of the API contract, because production may differ from `master`.
-- Do not add features, hardening, UX improvements, or behavior changes that the old service did not have (for example multi-device login, rate limiting, security headers, health checks). If an idea seems valuable, mention it in one line as a candidate for after the port. Do not implement it.
-- Settings that no code reads are not behavior. Do not port them.
-- If a behavior cannot be ported for security reasons (for example storing GitHub tokens in plain text), ask first.
-- Implementation style (libraries, file layout, naming) is free as long as the observable behavior is identical.
+When Phase 1 ends, delete this section, the Phase 1 note in step 1 of the core principles, and that file. `grep -rn porting-principle` finds every pointer to it.
+
+## Core principles for every task
+
+Before writing code, walk this ladder. Stop at the first answer that works.
+
+1. Does this need to exist? No: skip it. (Phase 1: only if the old backend had it.)
+2. Already in this codebase (`common/`, an existing module)? Reuse it.
+3. Node standard library or a NestJS built-in? Use it.
+4. Installed dependency? Use it.
+5. Only then: write the minimum that works.
+
+- KISS: boring code beats clever code.
+- Do not add helpers, wrappers, or config options "for later".
+- WET > DRY (write it twice before abstracting): extract only when three or more call sites want the same behavior, not merely similar code. A shared abstraction couples callers whose needs diverge, and duplication is cheaper than the wrong abstraction.
+- Validate at trust boundaries (request DTOs, environment variables), not for states that cannot happen.
+- Fix root causes, not symptoms.
+- Offer a more advanced option only for core logic, repeated patterns, performance-critical work, or security.
 
 ## Working with the maintainer
 
@@ -43,7 +56,7 @@ apps/server/test/    tests that start an HTTP app (contract/, error/)
 apps/server/contract/front-contract.json
                      snapshot of the frontend's generated client; regenerate with
                      apps/server/scripts/extract-contract.mjs <frontend>/src/generated/api
-docs/                backend-plan.md, infra-notes.md
+docs/                backend-plan.md, infra-notes.md, porting-principle.md
 ```
 
 ## Commands
@@ -66,12 +79,11 @@ Before opening a PR, `lint`, `typecheck`, `test`, and `build` must all pass. CI 
 - TypeScript strict. Never use `any` (oxlint enforces it); use `unknown` with type guards.
 - ESM: relative imports end with `.js` (for example `./app.module.js`).
 - File names are kebab-case with a type suffix: `comment-request.dto.ts`, `global-exception.filter.ts`. A DTO class name equals the old OpenAPI schema name (`CommentRequest`, `ResponseDto`, ...). Do not rename it, because the frontend's generated client uses that name.
-- Layers: controller -> service -> repository. Import the ORM only in `*.repository.ts`. Add an interface only where an implementation may be swapped (`TokenStore`, `ImageStorage`, `ChatClient`, `GithubClient`, `UserRepository`). No CQRS and no full hexagonal architecture.
+- Layers: controller -> service -> repository. Import the ORM only in `*.repository.ts`. Add an interface only where an implementation may be swapped (`TokenStore`, `ImageStorage`, `ChatClient`, `GithubClient`, `UserRepository`).
 - Expected failures: `throw new BusinessException(ErrorCode.X)`. Do not create per-domain exception subclasses. Never throw Nest `HttpException` from guards or pipes: the global filter maps every unrecognized exception, including `HttpException`, to 500 `C004`, as the old catch-all did. Never put internal error details in a response.
 - Responses: build bodies with `ResponseDto.of(message, data, status)`. Every success response is HTTP 200, as in the old Spring code. The `@Ok*` decorators (`@OkOf`, `@OkListOf`, `@OkPagedOf`, `@OkString`, ...) set HTTP 200 and document the `data` shape together; use them instead of `@ApiOkResponse`.
 - API contract: `operationId` is the method name and must be unique across controllers. Do not add tags (`autoTagControllers: false`). Keep the global `bearerAuth`. Give every `@ApiProperty` an explicit `type`, and do not enable the `@nestjs/swagger` CLI plugin.
 - Configuration: add every new environment variable to the validation in `config/env.validation.ts` and to `.env.example`. Secrets appear in `.env.example` by name only. Validation messages must not contain values.
-- Fix root causes, not symptoms. Start with the simplest solution that fully works; offer a more advanced option only for core logic, repeated patterns, performance-critical work, or security. Do not over-engineer simple CRUD.
 
 ## Testing
 
