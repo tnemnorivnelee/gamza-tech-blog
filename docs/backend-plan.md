@@ -79,7 +79,7 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
 2. **태그를 붙이지 않는다.** typescript-fetch는 태그마다 API 클래스를 나눠서 프론트 import가 전부 깨진다. `@nestjs/swagger`는 컨트롤러 이름으로 태그를 **자동으로 붙이므로**(시험에서 `FakeComment` 태그가 실제로 나왔다) `createDocument`에 `autoTagControllers: false`를 준다. [확인함] 옛 컨트롤러는 `@Operation(tags = "댓글 기능")` 같은 한글 태그를 `@Operation` 45개 중 32개에 붙였는데도 프론트에는 `DefaultApi`뿐이다. 한글만 있는 태그를 생성기가 지워서 기본 클래스로 모았을 가능성이 있지만 [미검증], 우리는 태그를 두지 않으므로 어느 쪽이든 `DefaultApi`가 되는 것이 기대값이다. 전체 생성기 diff(M8)로 확인한다.
 3. **제네릭 래퍼는 클래스를 만들지 않고, 응답마다 데코레이터로 `data` 자리만 적는다.** [통상적인 방식으로 결정, 2026-11-04] 실제 응답 클래스 `ResponseDto`·`PagedResponse`는 `common/dto/`에 하나씩만 두고, 각 응답에 `@OkOf(모델)`, `@OkListOf(모델)`, `@OkPagedOf(모델)`, `@OkString()`·`@OkLong()`·`@OkBoolean()`·`@OkVoid()`(`common/swagger/api-decorators.ts`)를 붙인다. 이 데코레이터가 `allOf`로 "공통 껍데기 + data 자리"를 문서에 적고 HTTP 200도 함께 건다. TypeScript는 제네릭을 남기지 않아서(Nest 공식 문서에도 나오는 한계) `T`는 엔드포인트마다 문서에 직접 적어야 한다. [확인함]
    - 공통 껍데기 스키마(`ResponseDto`, `PagedResponse`)는 `data`/`content` 없이 나머지 필드만 갖는다. `data`까지 적으면 `allOf`에서 타입이 충돌한다(문자열 응답의 `data`가 `object`이면서 `string`이 된다). 응답 필드는 옛 springdoc 명세처럼 전부 선택(required 없음)이다.
-   - **이름**: 이름 없는 스키마라서 `title`에 옛 이름(`ResponseDtoCommentResponse` 등)을 넣는다. openapi-generator가 이름 없는 스키마의 모델 이름으로 `title`을 쓰는 것으로 알고 있지만 [미검증], 쓰지 않으면 `AddComment200Response` 같은 자동 이름이 붙는다. M8의 전체 생성기 비교에서 확인한다. 프론트에 주는 영향은 15절에 따로 적었다.
+   - **이름**: 이름 없는 스키마라서 `title`에 옛 이름(`ResponseDtoCommentResponse` 등)을 넣는다. 이 방식(커스텀 데코레이터 + `allOf` + `title`)은 Nest 공식 문서의 "Generic ApiResponse"(`docs.nestjs.com/openapi/operations`)가 `ApiPaginatedResponse` 예시로 그대로 소개한다. 문서는 `title`을 넣으면 클라이언트 생성기가 반환 타입 이름을 그 값으로 정한다고 설명하지만 예시는 Angular 생성기 기준이다. 우리가 쓰는 typescript-fetch 7.14에서도 같은지는 [미검증]이고, 쓰지 않으면 `AddComment200Response` 같은 자동 이름이 붙는다. M8의 전체 생성기 비교에서 확인한다. 프론트에 주는 영향은 15절에 따로 적었다.
    - 계약 비교는 이름이 아니라 구조로 한다: `$ref`를 따라가고 `allOf`를 합쳐 필드·필수 여부·타입을 계약의 `ResponseDtoXxx` 모델과 비교하고, `title`이 계약의 이름과 같은지도 본다.
 4. **응답 모양을 같게 한다.** `data` null 생략, `timestamp` epoch ms, 페이지 번호 0부터, 에러 `code` 문자열은 옛 `ErrorCode` 표를 그대로 옮긴다.
    - **HTTP 상태는 모두 200이다.** 옛 컨트롤러는 `ResponseEntity`도 `@ResponseStatus`도 쓰지 않아서, `ResponseDto.of(HttpStatus.CREATED, …)`를 돌려줘도 HTTP는 200이었고 본문 `status`만 201이었다. Nest는 POST를 201로 내므로 `@Ok(모델)` 데코레이터가 `@HttpCode(200)`과 문서의 200 응답을 **함께** 건다. 한쪽만 걸면 문서와 실제가 어긋난다. [확인함]
@@ -135,6 +135,12 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
 - **프록시 신뢰 설정은 넣지 않는다** [제안]: 옛 앱도 포워딩 헤더 설정이 없었고 쿠키의 Secure를 고정으로 썼다. `res.cookie`로 직접 설정하면 요청이 HTTP로 들어와도 Secure 속성이 붙는다. 세션 라이브러리를 쓰게 되면 다시 본다.
 - **이미지 업로드** [이식]: 옛 검증을 그대로 옮긴다. 확인한 값은 프로필 이미지 기준으로 확장자 jpg·jpeg·png·gif, 최대 3MB(멀티파트 설정도 3MB)다. 글 이미지의 검증은 옛 `PostImageServiceUtil` 등을 읽고 맞춘다 [미검증].
 - **이미지 저장소** [제안]: `ImageStorage` 인터페이스 뒤에 두고, 구현은 S3 호환 클라이언트(`@aws-sdk/client-s3`, endpoint는 환경변수)로 한다. 옛 이미지 URL이 이미 S3를 가리키고, 저장소 종류는 인프라 단계에서 정해도 코드가 같다.
+- **에러 처리** [이식]: 옛 `GlobalExceptionHandler`와 같은 매핑이다(`common/error/global-exception.filter.ts`). 응답은 `{message, status, errors, code}`이고, `ErrorCode` 46개는 옛 enum에서 생성해 그대로 옮겼다(값이 이상해도 바꾸지 않는다. 예: `ENTITY_NOT_FOUND`가 400).
+  - `BusinessException` → `ErrorCode`의 status와 message. 옛 하위 예외 약 20개는 전부 `ErrorCode` 하나만 넘겼으므로 하위 클래스 없이 `new BusinessException(ErrorCode.X)`로 던진다. 응답에는 예외 메시지가 아니라 `ErrorCode`의 message가 나간다(옛 동작).
+  - 본문 검증 실패 → 400 `C001`과 필드별 오류(`ValidationFailedException`), 경로·쿼리 타입 불일치 → 400 `C005`(`ArgumentTypeMismatchException`). 던지는 쪽(검증 파이프)은 첫 검증이 필요한 컨트롤러를 옮길 때 연결한다. null 값은 빈 문자열로 나간다.
+  - 그 밖의 모든 예외 → 500 `C004`. 원인은 응답에 싣지 않고 로그에만 남긴다. Nest 내부의 `HttpException`(없는 경로, 잘못된 JSON 등)도 여기로 간다(옛 catch-all이 그랬다). 그래서 가드·파이프도 `HttpException` 대신 `BusinessException`을 던진다.
+  - **알려진 차이**: 옛 서버는 잘못된 HTTP 메서드에 405 `C002`를 줬지만 Express는 이를 없는 경로와 구별하지 못해 500 `C004`가 나간다. 옛 처리기의 `AccessDeniedException` 분기는 Spring Security가 아니라 `java.nio.file`의 것을 잘못 import해서 실제로는 동작하지 않았으므로 옮기지 않았다.
+  - **인증 실패(401/403) 응답**은 이 처리기가 아니라 옛 `SecurityConfig`의 진입점과 거부 처리기가 만들었다. 인증(M2)에서 그 코드를 읽고 옮긴다.
 - **예약 작업** [이식]: 임시 이미지 정리(`TempImageCleanupScheduler`)는 `@nestjs/schedule`로 옮긴다. 주기와 규칙은 옛 코드를 읽고 맞춘다.
 
 ## 9. 테스트와 CI
@@ -156,7 +162,7 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
 
 **A. 지금 시작 가능 (덤프 불필요. 단 M2~M3의 사용자 저장은 M4 이후에 연결)**
 - **M0** 레포 생성(승인 후), 스켈레톤, lint/test/build CI, 환경변수 검증
-- **M1** 가장 큰 위험(계약)을 맨 앞에 둔다. **M1-1** 응답 래퍼, Swagger 설정, 가짜 컨트롤러로 계약 diff 시험(통과). **M1-2** `ErrorCode`와 전역 예외 필터
+- **M1** 가장 큰 위험(계약)을 맨 앞에 둔다. **M1-1** 응답 래퍼, Swagger 설정, 가짜 컨트롤러로 계약 diff 시험(통과). **M1-2** `ErrorCode`와 전역 예외 필터(통과)
 - **M2** 인증: JWT, `TokenStore`(Redis), 쿠키, reissue·logout, 가드, 접근 규칙 표 테스트. 가드가 role을 `UserRepository`로 읽으므로 **인메모리 구현으로 개발**한다.
 - **M3** GitHub 로그인 (새 OAuth 앱 필요). 콜백이 사용자를 찾거나 PRE_REGISTER로 만드는 부분은 `UserRepository`까지만 만들고, 실제 저장은 M4 뒤에 연결한다.
 
@@ -201,6 +207,8 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
 | 같은 `title`의 이름 없는 스키마가 여러 작업에서 쓰일 때 하나의 모델로 합쳐지는지(`PagedResponsePostListResponse`는 여러 API가 공유한다) | M8 |
 | 생성기가 `allOf` 응답을 TypeScript로 어떻게 만드는지(`extends`, 교차 타입 등)와 프론트가 그대로 컴파일되는지 | M8 |
 | ADMIN 부여 지점 | M2 |
+| 옛 `SecurityConfig` 진입점·거부 처리기가 만드는 401/403 응답 본문 | M2 |
+| 옛 서버가 없는 경로·잘못된 JSON에 실제로 500을 줬는지(코드만 읽고 내린 판단이라 운영 중 응답은 못 봤다) | 덤프·운영 로그가 있으면 |
 | 옛 GitHub 로그인 스코프(암호문)와 성공 후 리다이렉트 규칙 | M3 |
 | Prisma 7의 MySQL `db pull` 품질, v7 고정 | M4 |
 | 날짜 형식과 시간대(9시간) | M4~M5 |
