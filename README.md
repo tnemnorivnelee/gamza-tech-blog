@@ -7,6 +7,8 @@
 - `apps/server`: NestJS API 서버
 - `apps/web`: 프론트엔드 (예정). 지금은 `potato-club/GamzaTechBlog-front`에서 따로 운영합니다.
 - `docs/backend-plan.md`: 구현 계획과 결정 이유
+- `docs/infra-notes.md`: 코드에 드러나지 않는 인프라 사실(도메인, 서버, 팀원 합의)
+- `AGENTS.md`: 작업 규칙과 AI 도구용 지침 (`CLAUDE.md`는 이것을 불러옵니다)
 
 ## 개발
 
@@ -17,10 +19,11 @@ fnm use                                    # .nvmrc의 Node 사용
 yarn install
 cp apps/server/.env.example apps/server/.env
 yarn dev                                   # 개발 서버
-yarn lint && yarn test && yarn build       # CI와 같은 검사
+yarn lint && yarn typecheck && yarn test && yarn build   # CI와 같은 검사
 ```
 
 ## 지켜야 할 것
 
 - `.env`, DB 덤프(`*.sql`, `*.dump` 등)는 커밋하지 않습니다. 덤프에 개인정보가 있습니다.
 - 작업은 Issue → Branch(`<type>/<이슈번호>-<설명>`) → PR 순서로 합니다. 커밋 메시지는 한국어로 씁니다.
+- 자세한 규칙(이식 원칙, 코딩·시험 규칙, 절대 하지 않는 것)은 `AGENTS.md`를 봅니다.
