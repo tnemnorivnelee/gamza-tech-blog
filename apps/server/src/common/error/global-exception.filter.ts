@@ -7,14 +7,18 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ErrorResponse, FieldError } from '../dto/error-response.dto.js';
+import { ResponseDto } from '../dto/response.dto.js';
 import { BusinessException } from './business.exception.js';
 import { ErrorCode } from './error-code.js';
 import {
   ArgumentTypeMismatchException,
   ValidationFailedException,
 } from './input.exception.js';
+import { JwtAuthenticationException } from './jwt-authentication.exception.js';
 
 // 옛 GlobalExceptionHandler와 같은 매핑이다.
+//  - JwtAuthenticationException → ErrorCode의 status. 본문은 ErrorResponse가 아니라 ResponseDto 모양이고
+//                                 data에 code 문자열이 담긴다(옛 JwtAuthenticationEntryPoint가 그랬다)
 //  - BusinessException      → ErrorCode의 status와 message
 //  - 본문 검증 실패          → 400, C001, 필드별 오류
 //  - 경로·쿼리 타입 불일치    → 400, C005
@@ -33,6 +37,17 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   }
 
   private toResponse(exception: unknown) {
+    if (exception instanceof JwtAuthenticationException) {
+      const { errorCode } = exception;
+      return {
+        status: errorCode.status,
+        body: ResponseDto.of(
+          errorCode.message,
+          errorCode.code,
+          errorCode.status,
+        ),
+      };
+    }
     if (exception instanceof BusinessException) {
       const { errorCode } = exception;
       return { status: errorCode.status, body: ErrorResponse.of(errorCode) };

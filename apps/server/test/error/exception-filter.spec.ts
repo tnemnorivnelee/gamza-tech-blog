@@ -14,6 +14,7 @@ import {
   ArgumentTypeMismatchException,
   ValidationFailedException,
 } from '../../src/common/error/input.exception.js';
+import { JwtAuthenticationException } from '../../src/common/error/jwt-authentication.exception.js';
 
 @Controller('boom')
 class BoomController {
@@ -47,6 +48,16 @@ class BoomController {
   @Get('http')
   http(): never {
     throw new NotFoundException('nope');
+  }
+
+  @Get('jwt-missing')
+  jwtMissing(): never {
+    throw new JwtAuthenticationException(ErrorCode.JWT_NOT_FOUND);
+  }
+
+  @Get('jwt-invalid')
+  jwtInvalid(): never {
+    throw new JwtAuthenticationException(ErrorCode.INVALID_TYPE_VALUE);
   }
 }
 
@@ -144,6 +155,39 @@ describe('GlobalExceptionFilter', () => {
     expect(body.code).toBe('C004');
     expect(logWarn).toHaveBeenCalledOnce();
     expect(logError).not.toHaveBeenCalled();
+  });
+
+  // 인증 실패는 ErrorResponse가 아니라 ResponseDto 모양이다. code 키가 없고 data에 코드 문자열이 들어간다.
+  it('JwtAuthenticationException은 ErrorCode의 status로 나가고 본문은 ResponseDto 모양이다', async () => {
+    const { status, body } = await call('/boom/jwt-missing');
+    expect(status).toBe(403);
+    expect(body).toEqual({
+      status: 403,
+      message: 'JWT 토큰을 찾을 수 없습니다.',
+      data: 'J004',
+      timestamp: expect.any(Number),
+    });
+    expect(Object.keys(body)).toEqual([
+      'status',
+      'message',
+      'data',
+      'timestamp',
+    ]);
+    expect(logError).not.toHaveBeenCalled();
+  });
+
+  // 같은 C005라도 던지는 예외에 따라 본문 모양이 다르다. 옛 동작을 그대로 옮긴 것이다.
+  it('같은 C005가 JwtAuthenticationException에서는 ResponseDto, 타입 불일치에서는 ErrorResponse로 나간다', async () => {
+    const jwt = await call('/boom/jwt-invalid');
+    expect(jwt.status).toBe(400);
+    expect(jwt.body).toMatchObject({ status: 400, data: 'C005' });
+    expect(jwt.body).not.toHaveProperty('code');
+    expect(jwt.body).not.toHaveProperty('errors');
+
+    const type = await call('/boom/type');
+    expect(type.status).toBe(400);
+    expect(type.body).toMatchObject({ status: 400, code: 'C005' });
+    expect(type.body).not.toHaveProperty('data');
   });
 
   // 알려진 차이: 옛 서버는 405(C002)였다. Express는 잘못된 메서드를 없는 경로와 구별하지 못한다.
