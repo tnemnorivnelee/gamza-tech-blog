@@ -56,15 +56,18 @@
 ### 3.3 reissue (공개 경로)
 - 리프레시 쿠키가 없으면: **HTTP 200**, 본문 `status`만 401, 메시지 "리프레시 토큰이 없습니다.", `data` 없음, Set-Cookie 없음.
 - Redis에 그 토큰이 없으면: 403 · `J004`. 이쪽은 `BusinessException`이라 일반 에러 모양(`ErrorResponse`)이다. 3.2의 실패와 모양이 다르다.
-- 있으면: 새 액세스 토큰을 만들고 Redis의 리프레시 만료를 30일로 다시 늘린다. 본문 `{authorization: 새 토큰}`, 메시지 "토큰 재발급 성공". Set-Cookie는 **`authorization` 하나뿐**이다.
+- 있으면: 새 액세스 토큰을 만들고 Redis의 `refresh:<토큰>` 키 만료를 30일로 다시 늘린다(옛 `touchTtl`). 본문 `{authorization: 새 토큰}`, 메시지 "토큰 재발급 성공". Set-Cookie는 **`authorization` 하나뿐**이다.
 - 리프레시 JWT 자체는 검증하지 않고 Redis에 있는지만 본다. 사용자가 아직 DB에 있는지도 보지 않는다.
-- 리프레시 쿠키는 `@CookieValue("refreshToken")`으로 읽는다. 값을 그대로 쓰고 `Bearer`를 떼지 않는다(액세스 토큰 헤더와 다르다).
-- 리프레시 **쿠키는 다시 내려주지 않는다.** 그래서 브라우저의 쿠키 수명은 로그인 때 정해진 30일 그대로이고, "연장"은 Redis 쪽에서만 일어난다.
+- 리프레시 쿠키는 `@CookieValue("refreshToken", required = false)`로 읽는다. 값을 그대로 쓰고 `Bearer`를 떼지 않는다(액세스 토큰 헤더와 다르다).
+- `refreshToken=`처럼 값이 빈 쿠키는 "쿠키 없음"(본문 401)이 아니라 Redis에 없는 토큰(403 `J004`)으로 본다 **[추정]**. `@CookieValue`가 빈 문자열을 그대로 넘긴다고 보고 그렇게 고정했다.
+- 리프레시 **쿠키는 다시 내려주지 않는다.** 그래서 브라우저의 쿠키 수명은 로그인 때 정해진 30일 그대로이고, "연장"은 Redis 쪽에서만 일어난다. 그 연장도 `refresh:<토큰>` 키 하나뿐이다. `userRefresh:<githubId>` 키는 로그인 때의 만료 그대로다(그래서 개선 후보 12번).
 - 프론트 `proxy.ts`는 응답이 2xx이고 Set-Cookie가 있어야 성공으로 본다.
 
 ### 3.4 logout (로그인 필요)
-- Redis에서 `userRefresh:<githubId>`와 `refresh:<리프레시 토큰>`을 지우고, 액세스 토큰을 남은 초만큼 `blacklist:access:<토큰>`에 올린다.
+- 순서(옛 `BlacklistServiceImpl`): `userRefresh:<githubId>`를 읽고 지운다 → 그 값이 가리키는 `refresh:<토큰>`을 지운다(요청 쿠키의 리프레시 토큰이 아니라 이 값이다) → 헤더의 액세스 토큰으로 남은 초를 계산해 `blacklist:access:<토큰>`에 올린다. 쿠키 만료는 컨트롤러가 마지막에 한다.
 - 블랙리스트에 올리는 토큰은 **헤더**(`ACCESS`, `Authorization`)에서만 읽는다. 쿠키로만 인증한 요청은 올라가지 않는다. 프론트는 항상 헤더를 같이 보내서 실제로 문제는 없다. 이 두 가지는 테스트로 고정한다.
+- 이 헤더 읽기는 **가드와 방식이 다르다.** `ACCESS`가 있으면(빈 문자열도) 그 값 하나만 골라 `Bearer ` 검사를 한다. `ACCESS`가 접두어 없이 오면 가드는 `Authorization`으로 넘어가 인증이 되지만, 블랙리스트 쪽은 `null`이라 아무것도 올라가지 않는다(개선 후보 11번).
+- 남은 초를 계산할 때 토큰을 다시 검증해서, 쿠키로 인증하고 헤더에 만료·위조된 토큰을 보내면 예외가 나 500 `C004`가 된다. 이때 리프레시 토큰은 이미 지워졌고 쿠키는 만료되지 않는다(개선 후보 11번).
 - 두 쿠키를 `Max-Age=0`으로 만료시킨다. 본문은 메시지 "로그아웃되었습니다."에 `data` 없음.
 - `USER`·`ADMIN`만 부를 수 있다. 즉 `PRE_REGISTER`·`PENDING` 사용자는 로그아웃할 수 없다(옛 규칙 그대로).
 
@@ -107,20 +110,22 @@ apps/server/src/
   modules/user/       user.repository.ts (인터페이스 + 임시 구현)
 ```
 
+- **Redis 구현의 위치는 M2-4 전에 정한다.** 이 문서는 `modules/auth/`에, `backend-plan.md` 4절은 `infra/redis/`에 둔다고 적어서 서로 어긋난다.
+- **`modules/auth/` 폴더는 평평하게 둔다**(2026-11-06 사용자 결정). 파일이 늘어나는 후속 작업(M2-4, M3)에서 하위 폴더로 나눌지를 함께 정리한다. 검토한 안: 역할별 `guard/`·`token/`·`http/`(층이 섞여 보임), 층이 보이게 `guard/`와 `store/`만 나누기(추천했던 안). 정리할 때 `AGENTS.md`에 가드가 store·repository를 직접 쓰는 예외와 Repository/Store/Client 층 이름도 적는다.
 - **가드는 `common/`이 아니라 `modules/auth/`에 둔다.** `TokenStore`와 `UserRepository`에 기대기 때문이다. `backend-plan.md` 4절의 "common/ … 가드, 데코레이터"와 달라지므로, 승인되면 4절을 고친다(지금은 고치지 않았다).
 - **가드 실패용 예외를 따로 만든다**(`JwtAuthenticationException`, 옛 이름 그대로). "도메인별 예외 하위 클래스 금지" 규칙을 어기는 것이 아니다. 목적이 다르다. 응답 **본문 모양**이 달라서(3.2) `BusinessException`에 태울 수 없다. `ValidationFailedException`을 둔 이유와 같다. 이 예외는 `BusinessException`을 상속하지 않는다(상속하면 필터의 첫 `instanceof` 검사에 먼저 걸린다).
 - **가드는 반드시 `throw`로 막는다.** `return false`를 하면 Nest가 `ForbiddenException`을 만들고, 우리 필터는 그것을 500 `C004`로 바꾼다.
 - 가드는 전역으로 걸고 기본은 "`USER`·`ADMIN` 로그인 필요"다(옛 `anyRequest().hasAnyRole(...)`). `@Public()`은 검사를 건너뛰고, `@Roles(...)`는 허용 role을 바꾼다.
 - `UserRepository`는 M2에서 `findByGithubId`만 가진다. M3·M4에서 필요한 메서드를 그때 더한다.
 - `TokenStore`가 하는 일: 리프레시 교체(Lua), 리프레시 조회, 만료 연장, 사용자 토큰 삭제, 블랙리스트 등록, 블랙리스트 조회.
-- 새 환경변수(검증과 `.env.example`에 같이 추가): `JWT_SECRET`(Base64, 풀었을 때 32바이트 이상), 액세스·리프레시 수명(**초 단위 정수**로 받아 단위 변환 코드를 없앤다), `COOKIE_DOMAIN`, Redis 접속 정보.
+- 새 환경변수(검증과 `.env.example`에 같이 추가): `JWT_SECRET`(Base64, 풀었을 때 32바이트 이상), 액세스·리프레시 수명(**초 단위 정수**로 받아 단위 변환 코드를 없앤다), `COOKIE_DOMAIN`(6절 D7: 운영에서만 필수), Redis 접속 정보.
 - 새 의존성: `@nestjs/jwt`(`12.0.3`, `@nestjs/common ^12` 호환 확인함), Redis 클라이언트(6절 D2). 쿠키는 읽기용 라이브러리 없이 `Cookie` 헤더를 직접 읽는다(6절 D6). 쿠키를 내려주는 것은 Express 내장 `res.cookie`로 한다.
 
 ## 5. 알려진 차이와 미검증
 
 1. **role이 안 맞는 로그인 사용자의 응답 [미검증]**. 옛 `SecurityConfig`는 `authenticationEntryPoint`만 설정했고 접근 거부 처리기는 없다. 그래서 예를 들어 `PENDING` 사용자가 로그아웃을 부르거나 `USER`가 관리자 API를 부르면 Spring 기본 처리기가 403을 내고, 그 뒤 Spring Boot 내부 `/error` 경로가 보안 검사를 한 번 더 지나는데, 이때 본문이 어떻게 나가는지는 코드만으로 확정할 수 없다. 운영에서 본 응답도 없다. 6절 D1에서 옛 동작의 추정대로 구현하기로 했다.
 2. **토큰 없이 없는 경로나 잘못된 메서드를 부를 때**. 옛 필터는 라우팅보다 먼저 돌아서 403 `J004`를 줬다. Nest 가드는 맞는 라우트에서만 돌아서 이 요청은 500 `C004`가 된다. 알려진 차이로 기록한다. 토큰이 있는 요청은 옛 서버도 500이었다고 추정한다(`backend-plan.md` 8절의 "없는 경로 → 500"은 이쪽에 해당하므로 서술을 좁힌다).
-3. **로컬 개발의 쿠키 도메인**. 쿠키의 `Domain`이 요청한 호스트와 다르면 브라우저가 쿠키를 버린다. 로컬에서는 `COOKIE_DOMAIN`을 따로 정해야 한다. M2-3에서 확인한다.
+3. **로컬 개발의 쿠키 도메인**. 쿠키의 `Domain`이 요청한 호스트와 다르면 브라우저가 쿠키를 버린다. 6절 D7에서 정했다: 로컬은 `COOKIE_DOMAIN`을 비워 `Domain` 속성을 생략한다(요청한 호스트에만 붙는 쿠키). 브라우저가 `Domain=localhost`를 받아 주는지, `http://localhost`에서 `Secure` 쿠키를 받는지는 **[미검증]**이다. 프론트를 연결할 때 확인한다.
 4. **개선 후보**: 이 문서에서 찾은 것(토큰 종류 구분 없음, 만료가 400 `C005`로 나가는 것 등)은 `docs/improvement-candidates.md`에 모았다. 1차에서는 옛 동작대로 구현한다.
 
 ## 6. 결정이 필요한 것
@@ -133,6 +138,7 @@ apps/server/src/
 - **D4. Redis 구현을 어떻게 시험하나.** 이 컴퓨터에는 Docker가 없었는데 2026-11-06에 Docker Desktop을 설치했다(후보 (b)의 전제가 갖춰졌고, 선택은 아직 안 했다). 로컬 Redis 컨테이너는 `apps/server/docker-compose.dev.yml`이 있다. 후보: (a) GitHub Actions의 서비스 컨테이너에서만 돌린다, (b) 로컬과 CI에서 돌린다, (c) Redis 모조품 라이브러리를 쓴다(진짜 Redis가 아니라 Lua 동작을 보장하지 못한다). D2에 따라 달라진다.
 - **D5. 작업 분할(7절).** **[확정 2026-11-05]** 4개로 간다. 비교한 안: 1개(가장 늦게 정해지는 결정에 전부 막힘), 3개(M2-1과 M2-2를 합침, 첫 PR이 D1까지 기다림), 4개. 결정이 풀리는 순서대로 진행할 수 있어서 4개로 정했다.
 - **D6. 쿠키를 읽는 방법.** **[확정 2026-11-06]** 가드 안에서 `Cookie` 헤더를 직접 읽는다(`access-token.ts`). 처음 계획은 `cookie-parser`였지만, 가드가 M2-3보다 먼저(M2-2) 쿠키를 읽게 되어 다시 정했다. 비교한 안: `cookie-parser`(쿠키를 객체로 바꿔서 이름 두 개 사이의 순서와 빈 값 건너뛰기를 잃고, `main.ts`에 등록하면 시험 앱에는 적용되지 않아 시험과 운영의 설정이 어긋남), `cookie` 패키지를 직접 선언(Express가 이미 쓰지만 결과가 객체라 같은 한계), 직접 읽기(약 10줄, 새 패키지 없음, 옛 동작을 그대로 만들 수 있음). 제약: 옛 `JwtTokenValidator`가 쿠키를 헤더에 적힌 순서대로 훑어 값이 있는 첫 `accessToken`/`authorization`을 쓴다(3.2).
+- **D7. 쿠키 `Domain`(환경변수 `COOKIE_DOMAIN`)이 비었을 때.** **[확정 2026-11-06]** 운영(`NODE_ENV=production`)에서만 필수이고, 그 밖에서는 비우면 `Domain` 속성을 생략한다. 값이 있으면 개발에서도 도메인 모양을 검사한다(틀린 값은 요청마다 쿠키를 만들 때 터지므로). 비교한 안: 선택 사항(비우면 생략. 운영에서 빼먹으면 쿠키가 `blog.gamza.xyz`와 공유되지 않아 로그인이 조용히 깨짐), 항상 필수(로컬에서도 값이 필요한데 브라우저가 `Domain=localhost`를 받는지 **[미검증]**), 운영에서만 필수(검증 규칙이 조건부로 하나 늘지만 빼먹는 실수를 부팅에서 막음). 제약: 옛 Spring은 `domain`이 `null`이면 속성을 생략하고, Express도 `undefined`이면 생략한다(시험으로 확인함).
 
 ## 7. 작업 분할 [제안]
 
