@@ -23,6 +23,13 @@ yarn dev                                   # 개발 서버
 yarn lint && yarn typecheck && yarn test && yarn build   # CI와 같은 검사
 ```
 
+로컬 MySQL·Redis(Docker)는 `apps/server/.env`에 `MYSQL_ROOT_PASSWORD`, `MYSQL_PASSWORD`, `REDIS_PASSWORD`를 채운 뒤 띄웁니다(`openssl rand -hex 24`로 만들 수 있습니다). 서버는 아직 이 둘에 연결하지 않습니다.
+
+```bash
+docker compose -f apps/server/docker-compose.dev.yml up -d     # 띄우기 (데이터는 볼륨에 남음)
+docker compose -f apps/server/docker-compose.dev.yml down      # 끄기 (데이터 유지, -v를 붙이면 삭제)
+```
+
 ## 지켜야 할 것
 
 - `.env`, DB 덤프(`*.sql`, `*.dump` 등)는 커밋하지 않습니다. 덤프에 개인정보가 있습니다.

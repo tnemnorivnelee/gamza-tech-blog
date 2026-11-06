@@ -1,0 +1,40 @@
+# 로컬 개발용 MySQL·Redis. Nest는 호스트에서 `yarn dev`로 띄우고, 의존하는 두 서비스만 컨테이너로 쓴다.
+# 비밀번호는 이 파일과 같은 폴더의 .env에서 읽는다(Nest가 읽는 .env와 같은 파일이다). 이름은 .env.example에 있다.
+# 실행: 저장소 루트에서 `docker compose -f apps/server/docker-compose.dev.yml up -d` (.env는 이 파일 옆 것을 읽는다)
+# 데이터는 이름 붙인 볼륨에 남는다. `down`은 데이터를 남기고, `down -v`는 데이터까지 지운다.
+
+# 프로젝트 이름. 정하지 않으면 폴더 이름(server)이 쓰여서 볼륨이 server_mysql-data처럼 모호해진다.
+name: gamza-dev
+
+services:
+  mysql:
+    # 기존 백업의 서버 버전과 같다.
+    image: mysql:8.0.41
+    environment:
+      # ${변수:?메시지}: 변수가 없거나 비어 있으면 컨테이너를 만들지 않고 이 메시지로 멈춘다(빈 비밀번호로 뜨는 것을 막는다).
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?apps/server/.env에 값을 채우세요}
+      # 처음 띄울 때 한 번만 만들어진다(볼륨에 데이터가 있으면 무시된다). 이름은 백업을 복원할 때(M4) 다시 정한다.
+      MYSQL_DATABASE: gamza
+      MYSQL_USER: gamza
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?apps/server/.env에 값을 채우세요}
+    ports:
+      # 앞의 127.0.0.1이 "이 Mac에서만"이다. 빼면 같은 와이파이의 다른 기기도 접속할 수 있다.
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+  redis:
+    # 사용자가 고른 최신 안정 버전. 옛 서버의 Redis 버전은 확인되지 않았다.
+    image: redis:8.10.3
+    # 공식 이미지에는 비밀번호용 환경변수가 없어서 실행 인자로 준다. `docker inspect`에는 이 값이 보인다(로컬 개발용이라 받아들인다).
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?apps/server/.env에 값을 채우세요}"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      # 기본 설정이 /data에 주기적으로 스냅샷(RDB)을 저장한다. 컨테이너를 지워도 볼륨이 남아 로그인 상태가 유지된다.
+      - redis-data:/data
+
+# 이름 붙인 볼륨. Docker가 관리하는 저장 공간이라 저장소 폴더 안에 데이터가 생기지 않는다.
+volumes:
+  mysql-data:
+  redis-data:
