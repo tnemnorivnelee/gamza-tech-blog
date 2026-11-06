@@ -56,6 +56,8 @@ apps/server/test/    tests that start an HTTP app (contract/, error/)
 apps/server/contract/front-contract.json
                      snapshot of the frontend's generated client; regenerate with
                      apps/server/scripts/extract-contract.mjs <frontend>/src/generated/api
+apps/server/docker-compose.dev.yml
+                     local MySQL and Redis for development; reads secrets from apps/server/.env
 docs/                backend-plan.md, infra-notes.md, porting-principle.md, m2-auth-plan.md, improvement-candidates.md
 ```
 
