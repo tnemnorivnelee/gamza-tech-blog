@@ -151,6 +151,7 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
 - **계약 검사**: 5절의 가벼운 diff를 CI에서 돌린다.
 - **e2e**: supertest와 실제 MySQL·Redis. GitHub Actions의 서비스 컨테이너를 쓰면 로컬 Docker 없이도 CI에서 돌릴 수 있다.
 - **CI는 lint → test → build까지만** 만든다. 배포는 인프라 단계에서 한다. 커버리지 수치 목표와 전체 스냅샷 테스트는 하지 않는다.
+- **CodeRabbit 리뷰 요청** [확정 2026-11-06, #27]: 스타 10개 미만인 공개 저장소에서 자동 리뷰가 생략되어, PR 생성·새 커밋·재오픈·초안 해제 때 GitHub Actions 기본 토큰으로 `@coderabbitai review` 댓글을 남긴다. 초안, 외부 포크, Dependabot 실행은 제외한다. 별도 개인 토큰이나 코드 체크아웃은 쓰지 않는다. 봇 댓글에 대한 CodeRabbit 응답은 실제 PR에서 검증한다.
 
 ## 10. 개발 환경과 보안 규칙
 

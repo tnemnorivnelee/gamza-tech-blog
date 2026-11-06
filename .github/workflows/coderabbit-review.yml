@@ -1,0 +1,23 @@
+name: CodeRabbit review request
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  request-review:
+    # 외부 포크와 Dependabot의 기본 토큰에는 댓글 작성 권한이 없다.
+    if: >-
+      !github.event.pull_request.draft &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 리뷰 요청 댓글 작성
+        run: gh pr comment "$PR_URL" --body '@coderabbitai review'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
