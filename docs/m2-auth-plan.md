@@ -106,11 +106,13 @@
 apps/server/src/
   common/error/       jwt-authentication.exception.ts (추가), global-exception.filter.ts (분기 추가)
   modules/auth/       auth.controller.ts, auth.service.ts, auth.guard.ts, 데코레이터,
-                      token-store.ts (인터페이스), 인메모리 구현, Redis 구현
+                      token-store.ts (인터페이스), redis-token-store.ts (운영 구현),
+                      in-memory-token-store.ts (시험에서 끼우는 가짜)
   modules/user/       user.repository.ts (인터페이스 + 임시 구현)
+  infra/redis/        redis.module.ts (Redis 연결만. 키·명령은 쓰는 쪽이 정한다)
 ```
 
-- **Redis 구현의 위치는 M2-4 전에 정한다.** 이 문서는 `modules/auth/`에, `backend-plan.md` 4절은 `infra/redis/`에 둔다고 적어서 서로 어긋난다.
+- **Redis 코드의 위치 [확정 2026-11-06, 사용자 결정]**: 연결은 `infra/redis/`, 토큰 키 이름과 Lua는 `modules/auth/redis-token-store.ts`에 둔다. 옛 백엔드가 연결 설정(`RedisConfig`)과 토큰 키·Lua(`RefreshTokenDao`)를 이렇게 나눠 두었다. 비교한 안: 전부 `infra/redis/`(인증 규칙이 인증 폴더 밖으로 나감), 전부 `modules/auth/`(나중에 챗봇·캐시가 같은 연결을 쓰려면 인증 폴더에서 가져와야 함), 나누기(어느 쪽 문서와도 완전히 같지 않아 `AGENTS.md`의 구조 설명을 맞췄다).
 - **`modules/auth/` 폴더는 평평하게 둔다**(2026-11-06 사용자 결정). 파일이 늘어나는 후속 작업(M2-4, M3)에서 하위 폴더로 나눌지를 함께 정리한다. 검토한 안: 역할별 `guard/`·`token/`·`http/`(층이 섞여 보임), 층이 보이게 `guard/`와 `store/`만 나누기(추천했던 안). 정리할 때 `AGENTS.md`에 가드가 store·repository를 직접 쓰는 예외와 Repository/Store/Client 층 이름도 적는다.
 - **가드는 `common/`이 아니라 `modules/auth/`에 둔다.** `TokenStore`와 `UserRepository`에 기대기 때문이다. `backend-plan.md` 4절의 "common/ … 가드, 데코레이터"와 달라지므로, 승인되면 4절을 고친다(지금은 고치지 않았다).
 - **가드 실패용 예외를 따로 만든다**(`JwtAuthenticationException`, 옛 이름 그대로). "도메인별 예외 하위 클래스 금지" 규칙을 어기는 것이 아니다. 목적이 다르다. 응답 **본문 모양**이 달라서(3.2) `BusinessException`에 태울 수 없다. `ValidationFailedException`을 둔 이유와 같다. 이 예외는 `BusinessException`을 상속하지 않는다(상속하면 필터의 첫 `instanceof` 검사에 먼저 걸린다).
@@ -118,7 +120,7 @@ apps/server/src/
 - 가드는 전역으로 걸고 기본은 "`USER`·`ADMIN` 로그인 필요"다(옛 `anyRequest().hasAnyRole(...)`). `@Public()`은 검사를 건너뛰고, `@Roles(...)`는 허용 role을 바꾼다.
 - `UserRepository`는 M2에서 `findByGithubId`만 가진다. M3·M4에서 필요한 메서드를 그때 더한다.
 - `TokenStore`가 하는 일: 리프레시 교체(Lua), 리프레시 조회, 만료 연장, 사용자 토큰 삭제, 블랙리스트 등록, 블랙리스트 조회.
-- 새 환경변수(검증과 `.env.example`에 같이 추가): `JWT_SECRET`(Base64, 풀었을 때 32바이트 이상), 액세스·리프레시 수명(**초 단위 정수**로 받아 단위 변환 코드를 없앤다), `COOKIE_DOMAIN`(6절 D7: 운영에서만 필수), Redis 접속 정보.
+- 새 환경변수(검증과 `.env.example`에 같이 추가): `JWT_SECRET`(Base64, 풀었을 때 32바이트 이상), 액세스·리프레시 수명(**초 단위 정수**로 받아 단위 변환 코드를 없앤다), `COOKIE_DOMAIN`(6절 D7: 운영에서만 필수), Redis 접속 정보(`REDIS_HOST` 기본 `127.0.0.1`, `REDIS_PORT` 기본 6379, `REDIS_PASSWORD` 선택. 옛 서버도 비밀번호가 비면 인증 없이 연결했고, CI의 Redis 서비스 컨테이너는 비밀번호가 없다. 호스트 기본값을 `localhost`로 두지 않은 이유: 로컬 Compose는 IPv4 `127.0.0.1`에만 열어서 `localhost`가 IPv6로 풀리면 거부당할 수 있다).
 - 새 의존성: `@nestjs/jwt`(`12.0.3`, `@nestjs/common ^12` 호환 확인함), Redis 클라이언트(6절 D2). 쿠키는 읽기용 라이브러리 없이 `Cookie` 헤더를 직접 읽는다(6절 D6). 쿠키를 내려주는 것은 Express 내장 `res.cookie`로 한다.
 
 ## 5. 알려진 차이와 미검증
@@ -133,9 +135,16 @@ apps/server/src/
 `AGENTS.md`에 따라 **한 번에 하나씩**, 후보 세 개 이상을 이 프로젝트의 확인된 제약과 비교해서 정한다. 아래는 목록과 이미 확인한 제약뿐이고, 비교와 추천은 해당 항목을 논의할 때 채운다.
 
 - **D1. role이 안 맞을 때의 응답 모양.** **[확정 2026-11-05]** 3.2의 실패와 같은 403 · `ResponseDto` 모양 · `J005`로 구현한다. 사용자 지침(비즈니스 로직은 옛 백엔드를 최대한 따르고, 개선할 점은 `improvement-candidates.md`에 기록)에 따라 옛 동작의 가장 그럴듯한 추정을 골랐다. 옛 응답은 여전히 [미검증]이다. 비교한 안: `ErrorResponse` 모양 + 403 + `C006`(`HANDLE_ACCESS_DENIED`, 옛 `ErrorCode`에 있지만 쓰이지 않던 코드), 403에 본문 없음. 프론트는 403 본문의 `message`를 보여 주고 `code`로 분기하지 않아서 어느 안이든 화면 동작은 같고 문구만 다르다.
-- **D2. Redis 클라이언트.** 후보: `ioredis`, `redis`(node-redis), Nest 내장 캐시 추상화(`@nestjs/cache-manager`). 제약: Lua 실행(`EVAL`), `SET EX`, `GET`, `DEL`, `EXPIRE`, `EXISTS`가 필요하고, ESM·Node 24에서 돌아야 한다. npm 조회 결과 `ioredis` 6.0.0, `redis` 6.3.1이 있고 둘 다 Node 20 이상이다. 캐시 추상화가 Lua를 지원하는지는 **[미검증]**.
+- **D2. Redis 클라이언트.** **[확정 2026-11-06]** `ioredis` 6.0.0. 비교한 안: `ioredis`(Lua를 `defineCommand`나 `eval`로 보내고, 객체를 만들면 자동 연결), `redis`(node-redis 6.3.1: `defineScript`가 타입을 갖추지만 `connect()`를 직접 부르고 `error` 리스너를 달아야 한다 **[추정]**), `@nestjs/cache-manager`(읽은 문서에 Lua·`EXPIRE`·`EXISTS`가 없고, 옛 `@Cacheable`에 해당하는 도구라 토큰 저장에는 맞지 않는다). 제약: Lua 실행(`EVAL`), `SET EX`, `GET`, `DEL`, `EXPIRE`, `EXISTS`, ESM·Node 24. 두 클라이언트 모두 Node 20 이상이다.
+  - 옛 백엔드는 Redis를 세 일에 썼다: 토큰 저장(`RefreshTokenDao`, 키를 직접 다룸), 챗봇 답변 저장(`GamzaChatService`, 같은 방식), 게시글·프로젝트·태그 캐시(`CacheConfig`와 `@Cacheable`, 캐시 5종 10~60분). 앞의 둘은 명령을 직접 보내는 클라이언트가 맞고, 셋째에 해당하는 `cache-manager`는 해당 마일스톤에서 따로 정한다. 둘을 같이 써도 된다(옛 서버도 한 Redis에서 접두사로 나눠 썼다).
+  - 구현은 `defineCommand` 대신 `eval`로 스크립트를 보낸다. 등록한 명령은 타입에 잡히지 않아 선언을 더 써야 하고, 로그인 빈도에서는 스크립트 전문을 매번 보내는 비용이 무시할 만하다. 부하가 문제가 되면 `defineCommand`(`EVALSHA`)로 바꾼다.
+  - 옛 코드는 Lua 실행이 실패하면 경고를 남기고 키를 하나씩 바꾸는 대체 경로(`rotateRefreshTokenLegacy`)로 돌아갔다. **[확정 2026-11-06, 사용자 결정]** 이 대체 경로도 그대로 옮긴다. 비교한 안: 옮기지 않음(Lua 실패가 에러로 드러나지만 옛 동작과 달라진다), 옮김(옛 동작과 같다. 대체 경로는 한 덩어리가 아니라 동시 로그인에 토큰이 둘 남을 수 있고 실패가 숨는다. 개선 후보 14번), 옮기되 한 덩어리로 보강(개선이라 1차 범위 밖).
 - **D3. 임시 구현을 어디에 두나.** **[확정 2026-11-05]** `src`에 인메모리 구현을 기본으로 두고 `shortcut:` 주석으로 M4 교체를 적는다. `backend-plan.md` 4절은 "Nest provider override로 인메모리 구현을 끼운다"고 제안했는데, 시험에서만 끼우면 가드가 `UserRepository`를 주입받는 M2-2부터 M4까지 `yarn dev`가 뜨지 않아서 M3의 OAuth 확인이 막힌다. 비교한 안: 시험에서만 끼움(서버가 안 뜸), `src`에 두되 `NODE_ENV=production`이면 시작 거부(교체를 잊는 위험을 코드로 막지만 분기가 늘고, 배포할 서버가 아직 없어 위험이 작다). 제약: M2 동안에는 사용자를 만드는 기능이 없어 인메모리 저장소가 비어 있으므로, 서버를 띄워 직접 로그인해 볼 수는 없고 시험으로 검증한다. 교체를 잊지 않도록 M4 시작 때 `shortcut:` 주석을 `grep`으로 모아 확인한다.
-- **D4. Redis 구현을 어떻게 시험하나.** 이 컴퓨터에는 Docker가 없었는데 2026-11-06에 Docker Desktop을 설치했다(후보 (b)의 전제가 갖춰졌고, 선택은 아직 안 했다). 로컬 Redis 컨테이너는 `apps/server/docker-compose.dev.yml`이 있다. 후보: (a) GitHub Actions의 서비스 컨테이너에서만 돌린다, (b) 로컬과 CI에서 돌린다, (c) Redis 모조품 라이브러리를 쓴다(진짜 Redis가 아니라 Lua 동작을 보장하지 못한다). D2에 따라 달라진다.
+- **D4. Redis 구현을 어떻게 시험하나.** **[확정 2026-11-06]** (b) 로컬과 CI 모두 진짜 Redis. 비교한 안: (a) CI의 서비스 컨테이너에서만(로컬에서는 Lua를 못 돌려 보고 PR 뒤에야 실패를 앎), (b), (c) 모조품 라이브러리(`ioredis-mock` 등. Lua를 얼마나 똑같이 흉내 내는지 **[미검증]**이고 새 의존성이 늘며, 흉내가 틀리면 통과한 시험이 소용없다). 제약: 한 기기 로그인의 핵심이 Lua의 한 덩어리 실행이라 가짜로는 증명할 수 없다. Docker Desktop은 2026-11-06에 설치했고 로컬 Redis는 `docker-compose.dev.yml`이 띄운다.
+  - 옛 백엔드에는 Redis·인증 시험이 없었다. 서비스 시험은 가짜 저장소와 Mockito만 썼고 CI 설정도 없었다. 그래서 따를 옛 방식이 없어 새로 정했다. 가드·컨트롤러 시험은 가짜(`InMemoryTokenStore`)를 끼우고, `RedisTokenStore`만 진짜 Redis로 시험한다.
+  - 방식: `redis-token-store.spec.ts`가 `REDIS_*` 환경변수(없으면 `127.0.0.1:6379`)로 먼저 연결해 본다. 로컬에서 연결되지 않으면 건너뛰고, `CI` 환경변수가 있는데 연결되지 않으면 실패한다(조용히 건너뛰면 CI가 통과해도 Redis는 한 번도 시험되지 않는다). CI는 `redis:8.10.3` 서비스 컨테이너(로컬 Compose와 같은 번호, 비밀번호 없음)를 쓴다.
+  - 로컬 `yarn test`가 Redis 시험을 돌리도록 시험 설정(`vitest.config.ts`)이 `apps/server/.env`에서 `REDIS_`로 시작하는 값만 읽는다(2026-11-06 사용자 결정). 다른 값(`COOKIE_DOMAIN` 등)은 시험에 들어오지 않아 시험 결과를 바꾸지 못한다.
+  - 개발용 Redis의 데이터를 건드리지 않는다. 키는 시험마다 새 UUID로 만들고 자기가 만든 키만 지운다. 데이터베이스 전체를 비우는 명령은 쓰지 않는다. 만료는 키마다 `TTL`로 확인한다(가짜 시계는 진짜 Redis에 통하지 않는다).
 - **D5. 작업 분할(7절).** **[확정 2026-11-05]** 4개로 간다. 비교한 안: 1개(가장 늦게 정해지는 결정에 전부 막힘), 3개(M2-1과 M2-2를 합침, 첫 PR이 D1까지 기다림), 4개. 결정이 풀리는 순서대로 진행할 수 있어서 4개로 정했다.
 - **D6. 쿠키를 읽는 방법.** **[확정 2026-11-06]** 가드 안에서 `Cookie` 헤더를 직접 읽는다(`access-token.ts`). 처음 계획은 `cookie-parser`였지만, 가드가 M2-3보다 먼저(M2-2) 쿠키를 읽게 되어 다시 정했다. 비교한 안: `cookie-parser`(쿠키를 객체로 바꿔서 이름 두 개 사이의 순서와 빈 값 건너뛰기를 잃고, `main.ts`에 등록하면 시험 앱에는 적용되지 않아 시험과 운영의 설정이 어긋남), `cookie` 패키지를 직접 선언(Express가 이미 쓰지만 결과가 객체라 같은 한계), 직접 읽기(약 10줄, 새 패키지 없음, 옛 동작을 그대로 만들 수 있음). 제약: 옛 `JwtTokenValidator`가 쿠키를 헤더에 적힌 순서대로 훑어 값이 있는 첫 `accessToken`/`authorization`을 쓴다(3.2).
 - **D7. 쿠키 `Domain`(환경변수 `COOKIE_DOMAIN`)이 비었을 때.** **[확정 2026-11-06]** 운영(`NODE_ENV=production`)에서만 필수이고, 그 밖에서는 비우면 `Domain` 속성을 생략한다. 값이 있으면 개발에서도 도메인 모양을 검사한다(틀린 값은 요청마다 쿠키를 만들 때 터지므로). 비교한 안: 선택 사항(비우면 생략. 운영에서 빼먹으면 쿠키가 `blog.gamza.xyz`와 공유되지 않아 로그인이 조용히 깨짐), 항상 필수(로컬에서도 값이 필요한데 브라우저가 `Domain=localhost`를 받는지 **[미검증]**), 운영에서만 필수(검증 규칙이 조건부로 하나 늘지만 빼먹는 실수를 부팅에서 막음). 제약: 옛 Spring은 `domain`이 `null`이면 속성을 생략하고, Express도 `undefined`이면 생략한다(시험으로 확인함).
@@ -147,7 +156,7 @@ apps/server/src/
 1. **M2-1 토큰과 사용자 조회**: 환경변수 검증 추가, `@nestjs/jwt`로 발급·검증, `UserRepository`(인터페이스 + 임시 구현), `JwtAuthenticationException`과 필터 분기. 시험: 클레임 모양, 만료·서명 오류, 예외 본문이 `ErrorResponse`와 다른 모양인 것.
 2. **M2-2 가드와 접근 규칙**: `TokenStore`(인터페이스 + 인메모리, 블랙리스트 두 메서드만. 나머지는 M2-3·M3·M2-4에서 필요해질 때 더한다), 전역 가드, 데코레이터, 토큰 찾는 순서(3.2)와 실패 4종(코드와 상태), 접근 규칙 표(`test/access/`). 표는 옛 분류 48개를 입력으로 하고 지금 등록된 라우트만 검사한다. 계약 시험처럼 컨트롤러를 옮길 때마다 범위를 넓힌다.
 3. **M2-3 reissue·logout**: 컨트롤러, 쿠키 설정(3.5)과 리프레시 쿠키 읽기(D6의 함수를 재사용), 3.3·3.4의 세부 동작 시험(HTTP 200인데 본문 401인 경우, 헤더만 블랙리스트에 오르는 경우 포함). 계약 비교 범위에 `reissue`(`ResponseDtoAccessTokenResponse`)와 `logout`(`ResponseDtoString`)을 추가하는 것이 이 PR의 확장 단계다.
-4. **M2-4 Redis `TokenStore`**: D2에서 고른 클라이언트로 구현, Lua 교체 스크립트, D4에서 고른 방식의 시험.
+4. **M2-4 Redis `TokenStore`** (이슈 #29): `ioredis`(D2)로 구현하고 Lua 교체 스크립트는 옛 것을 그대로 옮긴다. 시험은 진짜 Redis(D4). 기존 시험은 `overrideProvider`로 가짜 저장소를 끼운다.
 
 ## 8. backend-plan.md 정정 [확인한 사실 기준]
 
@@ -164,6 +173,6 @@ apps/server/src/
 
 ## 9. 사용자가 할 일
 
-1. 6절의 결정을 한 번에 하나씩 답한다. D5(분할), D3(임시 구현 위치), D1(role 부족 응답)은 정했다. 남은 것은 D2·D4(Redis, M2-4를 막음)다. M2-1과 M2-2, M2-3은 이 둘을 기다리지 않고 시작할 수 있다.
-2. ~~Docker Desktop 설치 여부~~ 설치 완료(2026-11-06). `backend-plan.md` 13절 3번과 같은 항목이다. D4의 시험 방식 선택은 남아 있다.
+1. ~~6절의 결정~~ D1~D7을 모두 정했다(D2·D4는 2026-11-06).
+2. ~~Docker Desktop 설치 여부~~ 설치 완료(2026-11-06). `backend-plan.md` 13절 3번과 같은 항목이다.
 3. JWT 시크릿은 M2-1 구현 때 만드는 방법을 안내한다. 값은 `.env`에만 둔다.
