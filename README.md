@@ -25,6 +25,8 @@ yarn lint && yarn typecheck && yarn test && yarn build   # CI와 같은 검사
 
 로컬 MySQL·Redis(Docker)는 `apps/server/.env`에 `MYSQL_ROOT_PASSWORD`, `MYSQL_PASSWORD`, `REDIS_PASSWORD`를 채운 뒤 띄웁니다(`openssl rand -hex 24`로 만들 수 있습니다). 서버는 아직 이 둘에 연결하지 않습니다.
 
+`yarn dev:local` 한 번이면 두 컨테이너를 띄우고(이미 떠 있으면 그대로 둡니다), 둘이 실제 요청을 받을 수 있을 때까지 기다린 뒤 `yarn dev`를 실행합니다. 준비에 실패하면 서버를 띄우지 않습니다. `Ctrl+C`는 서버만 끄고 컨테이너는 남깁니다. 이 명령이 성공해도 서버가 DB·Redis에 연결한다는 뜻은 아닙니다(연결 구현은 별도 작업입니다).
+
 ```bash
 docker compose -f apps/server/docker-compose.dev.yml up -d     # 띄우기 (데이터는 볼륨에 남음)
 docker compose -f apps/server/docker-compose.dev.yml down      # 끄기 (데이터 유지, -v를 붙이면 삭제)

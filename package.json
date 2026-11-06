@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "yarn workspace @gamza/server start:dev",
+    "dev:local": "docker compose -f apps/server/docker-compose.dev.yml up --wait && yarn dev",
     "build": "yarn workspace @gamza/server build",
     "lint": "yarn workspace @gamza/server lint",
     "typecheck": "yarn workspace @gamza/server typecheck",
