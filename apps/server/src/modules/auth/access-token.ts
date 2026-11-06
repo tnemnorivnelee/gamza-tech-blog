@@ -1,4 +1,5 @@
 import type { IncomingHttpHeaders } from 'node:http';
+import { cookiePairs } from './cookie-header.js';
 
 const BEARER_PREFIX = 'Bearer ';
 const COOKIE_NAMES = ['accessToken', 'authorization'];
@@ -16,15 +17,10 @@ export function resolveAccessToken(
   );
 }
 
-// 브라우저의 document.cookie처럼 "a=1; b=2" 문자열이다. Cookie 헤더에 적힌 순서대로 훑어서,
-// 이름이 accessToken 또는 authorization이고 값이 비어 있지 않은 첫 쿠키의 값을 돌려준다(옛 동작).
-// 쿠키 객체로 바꿔 주는 라이브러리는 이 순서와 빈 값 건너뛰기를 잃어서 쓰지 않았다.
+// Cookie 헤더를 훑어서, 이름이 accessToken 또는 authorization이고 값이 비어 있지 않은 첫 쿠키의 값을 돌려준다(옛 동작).
+// 빈 값은 건너뛰고 계속 본다. refreshToken 쿠키는 이 규칙을 쓰지 않는다(cookie-header.ts).
 function readCookieToken(cookieHeader: string | undefined): string | null {
-  for (const pair of cookieHeader?.split(';') ?? []) {
-    const eq = pair.indexOf('=');
-    if (eq < 0) continue;
-    const name = pair.slice(0, eq).trim();
-    const value = pair.slice(eq + 1).trim();
+  for (const [name, value] of cookiePairs(cookieHeader)) {
     if (COOKIE_NAMES.includes(name) && value !== '') return value;
   }
   return null;
@@ -36,4 +32,14 @@ function fromBearer(value: string | string[] | undefined): string | null {
   return typeof value === 'string' && value.startsWith(BEARER_PREFIX)
     ? value.slice(BEARER_PREFIX.length)
     : null;
+}
+
+// 로그아웃이 블랙리스트에 올릴 토큰. 가드의 resolveAccessToken과 읽는 방식이 다르다(옛 resolveAccessTokenFromHeader):
+// 쿠키는 보지 않고, ACCESS 헤더가 있으면 그 값 하나만 골라서 "Bearer " 검사를 한다.
+// 그래서 ACCESS가 접두어 없이 오면 Authorization에 유효한 토큰이 있어도 null이고, 아무것도 블랙리스트에 오르지 않는다.
+// ('' 도 값이 있는 헤더라서 ??가 넘어가지 않는다. 옛 Optional.ofNullable("")과 같다.)
+export function resolveAccessTokenFromHeader(
+  headers: IncomingHttpHeaders,
+): string | null {
+  return fromBearer(headers['access'] ?? headers.authorization);
 }

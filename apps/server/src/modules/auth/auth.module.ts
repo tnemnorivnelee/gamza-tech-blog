@@ -4,7 +4,9 @@ import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import type { EnvironmentVariables } from '../../config/env.validation.js';
 import { UserModule } from '../user/user.module.js';
+import { AuthController } from './auth.controller.js';
 import { AuthGuard } from './auth.guard.js';
+import { AuthService } from './auth.service.js';
 import { InMemoryTokenStore } from './in-memory-token-store.js';
 import { JwtTokenService } from './jwt-token.service.js';
 import { TokenStore } from './token-store.js';
@@ -31,7 +33,10 @@ import { TokenStore } from './token-store.js';
       }),
     }),
   ],
+  // controllers에 적은 클래스의 라우트가 앱에 붙는다.
+  controllers: [AuthController],
   providers: [
+    AuthService,
     JwtTokenService,
     // "TokenStore를 달라는 곳에는 InMemoryTokenStore를 만들어 넣어 준다"는 뜻이다. M2-4에서 useClass만 Redis 구현으로 바꾼다.
     { provide: TokenStore, useClass: InMemoryTokenStore },

@@ -73,6 +73,45 @@ describe('validateEnv', () => {
     );
   });
 
+  describe('COOKIE_DOMAIN', () => {
+    it('개발에서는 비워 둬도 된다(Domain 속성을 생략한다)', () => {
+      expect(validateEnv(base).COOKIE_DOMAIN).toBeUndefined();
+      expect(
+        validateEnv({ ...base, COOKIE_DOMAIN: '' }).COOKIE_DOMAIN,
+      ).toBeUndefined();
+    });
+
+    it.each(['.gamza.xyz', 'gamza.xyz', 'localhost'])(
+      '도메인 모양이면 통과한다 %s',
+      (domain) => {
+        expect(
+          validateEnv({ ...base, COOKIE_DOMAIN: domain }).COOKIE_DOMAIN,
+        ).toBe(domain);
+      },
+    );
+
+    it('운영에서는 필수다. 없거나 비어 있으면 던진다', () => {
+      const prod = { ...base, NODE_ENV: 'production' };
+      expect(() => validateEnv(prod)).toThrow('COOKIE_DOMAIN');
+      expect(() => validateEnv({ ...prod, COOKIE_DOMAIN: '' })).toThrow(
+        'COOKIE_DOMAIN',
+      );
+      expect(
+        validateEnv({ ...prod, COOKIE_DOMAIN: '.gamza.xyz' }).COOKIE_DOMAIN,
+      ).toBe('.gamza.xyz');
+    });
+
+    // 틀린 값은 부팅이 아니라 요청마다 쿠키를 만들 때 터지므로 값이 있으면 개발에서도 막는다.
+    it.each(['gamza xyz', 'gamza.xyz;Path=/', 'https://gamza.xyz', 'a..b'])(
+      '도메인 모양이 아니면 던진다 %s',
+      (domain) => {
+        expect(() => validateEnv({ ...base, COOKIE_DOMAIN: domain })).toThrow(
+          'COOKIE_DOMAIN',
+        );
+      },
+    );
+  });
+
   it('오류 메시지에 비밀값을 싣지 않는다', () => {
     const tooShort = Buffer.alloc(16, 'z').toString('base64');
     let message = '';

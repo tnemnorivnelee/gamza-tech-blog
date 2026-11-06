@@ -1,4 +1,7 @@
-import { resolveAccessToken } from './access-token.js';
+import {
+  resolveAccessToken,
+  resolveAccessTokenFromHeader,
+} from './access-token.js';
 
 // 옛 JwtTokenValidator.resolveAccessTokenFromCookies와 JwtProvider.resolveAccessToken의 동작을 고정한다.
 describe('resolveAccessToken', () => {
@@ -109,5 +112,56 @@ describe('resolveAccessToken', () => {
     it('"Bearer " 뒤가 비면 null이 아니라 빈 문자열이다', () => {
       expect(resolveAccessToken({ authorization: 'Bearer ' })).toBe('');
     });
+  });
+});
+
+// 로그아웃이 블랙리스트에 올릴 토큰을 읽는 방식. 위의 resolveAccessToken(가드용)과 다른 점을 고정한다.
+describe('resolveAccessTokenFromHeader', () => {
+  it('ACCESS가 Authorization보다 먼저다', () => {
+    expect(
+      resolveAccessTokenFromHeader({
+        access: 'Bearer from-access',
+        authorization: 'Bearer from-authorization',
+      }),
+    ).toBe('from-access');
+  });
+
+  it('Authorization만 있어도 된다', () => {
+    expect(
+      resolveAccessTokenFromHeader({ authorization: 'Bearer tok-1' }),
+    ).toBe('tok-1');
+  });
+
+  it('쿠키는 보지 않는다(쿠키로만 인증한 요청은 블랙리스트에 오르지 않는다)', () => {
+    expect(
+      resolveAccessTokenFromHeader({ cookie: 'authorization=tok-1' }),
+    ).toBeNull();
+  });
+
+  // 가드의 resolveAccessToken은 이 경우 Authorization으로 넘어가지만, 여기서는 ACCESS 값 하나만 골라 검사한다.
+  it('ACCESS에 Bearer가 없으면 Authorization에 유효한 토큰이 있어도 null이다', () => {
+    const headers = {
+      access: 'raw-token',
+      authorization: 'Bearer from-authorization',
+    };
+    expect(resolveAccessToken(headers)).toBe('from-authorization');
+    expect(resolveAccessTokenFromHeader(headers)).toBeNull();
+  });
+
+  // 빈 헤더도 값이 있는 헤더다(옛 Optional.ofNullable("")). 그래서 Authorization으로 넘어가지 않는다.
+  it('ACCESS가 빈 문자열이어도 Authorization으로 넘어가지 않는다', () => {
+    expect(
+      resolveAccessTokenFromHeader({
+        access: '',
+        authorization: 'Bearer from-authorization',
+      }),
+    ).toBeNull();
+  });
+
+  it('소문자 bearer나 헤더 없음은 null이다', () => {
+    expect(
+      resolveAccessTokenFromHeader({ authorization: 'bearer tok-1' }),
+    ).toBeNull();
+    expect(resolveAccessTokenFromHeader({})).toBeNull();
   });
 });

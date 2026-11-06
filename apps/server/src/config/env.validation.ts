@@ -5,14 +5,17 @@ import {
   IsBase64,
   IsIn,
   IsInt,
+  IsNotEmpty,
   IsOptional,
   IsUrl,
+  Matches,
   Max,
   Min,
   Validate,
   type ValidationArguments,
   ValidatorConstraint,
   type ValidatorConstraintInterface,
+  ValidateIf,
   validateSync,
 } from 'class-validator';
 
@@ -65,6 +68,18 @@ export class EnvironmentVariables {
   @IsInt()
   @Min(1)
   REFRESH_TOKEN_TTL_SECONDS: number = 2592000;
+
+  // 쿠키의 Domain 속성(예: .gamza.xyz). 비우면 속성을 생략해서 요청한 호스트에만 붙는 쿠키가 된다(로컬 개발용).
+  // 운영에서 빼먹으면 쿠키가 프론트 도메인과 공유되지 않아 로그인이 조용히 깨지므로, 운영에서는 필수로 막는다.
+  // @ValidateIf: 조건이 참일 때만 이 필드의 검사 규칙을 실행한다. 값이 있으면 개발에서도 모양을 검사한다(틀린 값은 요청마다 500이 된다).
+  @Transform(({ value }) => (value === '' ? undefined : value))
+  @ValidateIf(
+    (env: EnvironmentVariables) =>
+      env.NODE_ENV === 'production' || env.COOKIE_DOMAIN !== undefined,
+  )
+  @IsNotEmpty()
+  @Matches(/^\.?[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*$/)
+  COOKIE_DOMAIN?: string;
 }
 
 // 부팅 때 한 번 실행된다(ConfigModule이 부른다). 환경변수 객체를 EnvironmentVariables로 바꿔 규칙대로 검사하고,
