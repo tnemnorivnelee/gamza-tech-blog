@@ -32,7 +32,8 @@ class TtlMap<V> {
   }
 }
 
-// shortcut: 메모리에만 저장하고 재시작하면 사라진다. 만료된 항목은 조회할 때만 치워서 오래 두면 쌓인다. M2-4에서 Redis 구현으로 바꾼다.
+// 시험에서 Redis 대신 끼우는 가짜 저장소다(프론트 시험의 MSW 같은 역할). 운영 기본 구현은 RedisTokenStore다.
+// 메모리에만 저장하고 재시작하면 사라진다. 진짜 Redis와 다른 점: 남은 수명 0으로 블랙리스트에 올려도 던지지 않는다(Redis는 던진다).
 // @Injectable은 "Nest가 이 클래스를 만들고 주입할 수 있다"는 표시다.
 @Injectable()
 export class InMemoryTokenStore extends TokenStore {

@@ -51,7 +51,8 @@ apps/server/src/
                      error/ (ErrorCode, BusinessException, global exception filter),
                      swagger/ (setup, @Ok* decorators)
   modules/<domain>/  one Nest module per old domain; controller -> service -> repository; dto/
-  infra/             (planned) prisma, redis, storage, gemini, github
+  infra/             redis/ (connection only; key names and commands live with the caller, e.g. modules/auth);
+                     (planned) prisma, storage, gemini, github
 apps/server/test/    tests that start an HTTP app (contract/, error/)
 apps/server/contract/front-contract.json
                      snapshot of the frontend's generated client; regenerate with

@@ -1,4 +1,4 @@
-// 토큰 상태를 적어 두는 공유 메모장의 계약. 지금은 인메모리, M2-4에서 Redis 구현으로 바꾼다.
+// 토큰 상태를 적어 두는 공유 메모장의 계약. 운영 구현은 RedisTokenStore이고, 시험에서 끼우는 가짜가 InMemoryTokenStore다.
 // interface는 실행할 때 사라져서 Nest가 "무엇을 넣어 줄지" 알 수 없다. 남아 있는 추상 클래스를 이름표로 쓴다.
 // 메서드는 옛 RefreshTokenDao·BlacklistServiceImpl이 Redis에 하던 일과 1:1이다. 키 이름은 괄호에 적었다.
 export abstract class TokenStore {

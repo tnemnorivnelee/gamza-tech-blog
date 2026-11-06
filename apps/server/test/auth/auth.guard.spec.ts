@@ -7,6 +7,7 @@ import { validateEnv } from '../../src/config/env.validation.js';
 import { Public, Roles } from '../../src/modules/auth/access.decorator.js';
 import { AuthModule } from '../../src/modules/auth/auth.module.js';
 import { CurrentUser } from '../../src/modules/auth/current-user.decorator.js';
+import { InMemoryTokenStore } from '../../src/modules/auth/in-memory-token-store.js';
 import { JwtTokenService } from '../../src/modules/auth/jwt-token.service.js';
 import { TokenStore } from '../../src/modules/auth/token-store.js';
 import {
@@ -114,12 +115,15 @@ describe('AuthGuard', () => {
         PublicClassController,
       ],
     })
-      // 사용자 저장소만 시험용으로 바꿔 끼운다. src에는 시험용 시드 기능을 두지 않았다.
+      // 사용자 저장소와 토큰 저장소를 시험용으로 바꿔 끼운다. src에는 시험용 시드 기능을 두지 않았다.
+      // 토큰 저장소는 가짜(메모리)를 쓴다. 가드 규칙을 보는 시험이라 Redis가 필요 없다.
       .overrideProvider(UserRepository)
       .useValue({
         findByGithubId: (githubId: string) =>
           Promise.resolve(USERS.get(githubId)),
       })
+      .overrideProvider(TokenStore)
+      .useClass(InMemoryTokenStore)
       .compile();
     app = moduleRef.createNestApplication();
     setupSwagger(app);

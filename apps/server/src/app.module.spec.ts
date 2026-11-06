@@ -1,7 +1,8 @@
 import { Test } from '@nestjs/testing';
+import { Redis } from 'ioredis';
 import { AppModule } from './app.module.js';
-import { InMemoryTokenStore } from './modules/auth/in-memory-token-store.js';
 import { JwtTokenService } from './modules/auth/jwt-token.service.js';
+import { RedisTokenStore } from './modules/auth/redis-token-store.js';
 import { TokenStore } from './modules/auth/token-store.js';
 import { InMemoryUserRepository } from './modules/user/in-memory-user.repository.js';
 import { UserRepository } from './modules/user/user.repository.js';
@@ -19,8 +20,12 @@ describe('AppModule', () => {
     expect(moduleRef.get(UserRepository)).toBeInstanceOf(
       InMemoryUserRepository,
     );
-    // M2-4 전까지 토큰 저장소도 인메모리다(auth.module.ts).
-    expect(moduleRef.get(TokenStore)).toBeInstanceOf(InMemoryTokenStore);
+    // 토큰 저장소는 Redis 구현이다(auth.module.ts).
+    expect(moduleRef.get(TokenStore)).toBeInstanceOf(RedisTokenStore);
+    // 연결은 첫 명령을 보낼 때 열린다(lazyConnect). 그래서 이 시험은 Redis 없이도 끝나고, 앱을 닫으면 연결 객체도 끝난다.
+    const redis = moduleRef.get(Redis);
+    expect(redis.status).toBe('wait');
     await moduleRef.close();
+    expect(redis.status).toBe('end');
   });
 });

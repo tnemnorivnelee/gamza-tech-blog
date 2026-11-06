@@ -80,6 +80,21 @@ export class EnvironmentVariables {
   @IsNotEmpty()
   @Matches(/^\.?[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*$/)
   COOKIE_DOMAIN?: string;
+
+  // Redis 접속 정보. 기본값은 로컬 Compose(docker-compose.dev.yml)가 여는 주소다.
+  // "localhost"가 아니라 IPv4 주소를 쓴다: Compose는 127.0.0.1에만 열어서, localhost가 ::1(IPv6)로 풀리면 거부당할 수 있다.
+  @IsNotEmpty()
+  REDIS_HOST: string = '127.0.0.1';
+
+  @IsInt()
+  @Min(1)
+  @Max(65535)
+  REDIS_PORT: number = 6379;
+
+  // 비밀번호는 선택이다. 옛 서버도 비어 있으면 인증 없이 연결했다(CI의 Redis 서비스 컨테이너는 비밀번호가 없다).
+  @IsOptional()
+  @Transform(({ value }) => (value === '' ? undefined : value))
+  REDIS_PASSWORD?: string;
 }
 
 // 부팅 때 한 번 실행된다(ConfigModule이 부른다). 환경변수 객체를 EnvironmentVariables로 바꿔 규칙대로 검사하고,

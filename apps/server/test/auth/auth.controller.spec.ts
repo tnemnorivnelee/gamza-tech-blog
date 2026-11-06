@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 import { CommonModule } from '../../src/common/common.module.js';
 import { validateEnv } from '../../src/config/env.validation.js';
 import { AuthModule } from '../../src/modules/auth/auth.module.js';
+import { InMemoryTokenStore } from '../../src/modules/auth/in-memory-token-store.js';
 import { JwtTokenService } from '../../src/modules/auth/jwt-token.service.js';
 import { TokenStore } from '../../src/modules/auth/token-store.js';
 import {
@@ -59,12 +60,14 @@ async function createApp() {
     ],
     controllers: [PingController],
   })
-    // 사용자 저장소만 시험용으로 바꿔 끼운다.
+    // 사용자 저장소와 토큰 저장소를 시험용으로 바꿔 끼운다(토큰 저장소는 가짜라서 Redis가 필요 없다).
     .overrideProvider(UserRepository)
     .useValue({
       findByGithubId: (githubId: string) =>
         Promise.resolve(USERS.get(githubId)),
     })
+    .overrideProvider(TokenStore)
+    .useClass(InMemoryTokenStore)
     .compile();
   const app = moduleRef.createNestApplication();
   await app.listen(0);
