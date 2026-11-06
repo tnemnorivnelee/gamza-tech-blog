@@ -1,6 +1,8 @@
 import { Test } from '@nestjs/testing';
 import { AppModule } from './app.module.js';
+import { InMemoryTokenStore } from './modules/auth/in-memory-token-store.js';
 import { JwtTokenService } from './modules/auth/jwt-token.service.js';
+import { TokenStore } from './modules/auth/token-store.js';
 import { InMemoryUserRepository } from './modules/user/in-memory-user.repository.js';
 import { UserRepository } from './modules/user/user.repository.js';
 
@@ -17,6 +19,8 @@ describe('AppModule', () => {
     expect(moduleRef.get(UserRepository)).toBeInstanceOf(
       InMemoryUserRepository,
     );
+    // M2-4 전까지 토큰 저장소도 인메모리다(auth.module.ts).
+    expect(moduleRef.get(TokenStore)).toBeInstanceOf(InMemoryTokenStore);
     await moduleRef.close();
   });
 });

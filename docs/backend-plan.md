@@ -131,7 +131,7 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
 
 - **챗봇** [이식]: 옛 코드는 메시지 2000자 초과를 거부하고, Gemini 응답을 Redis에 TTL을 두고 캐시한다. 키와 TTL은 옛 `GamzaChatService`에서 그대로 옮긴다.
 - **챗봇 요청 횟수 제한은 이식하지 않는다.** 옛 설정에 20회/60초 값이 있지만 설정 파일과 프로퍼티 클래스에만 있고 읽는 코드를 찾지 못했다 [미검증]. 적용되지 않던 설정으로 보인다. 횟수 제한은 새 기능이라 이식이 끝난 뒤 따로 논의한다.
-- **CORS·쿠키** [이식]: 허용 출처를 환경변수로 받고(`blog.gamza.xyz`와 로컬) `credentials: true`. 쿠키는 `cookie-parser`로 읽고 `Secure`, 액세스 쿠키는 `SameSite=Lax`, 리프레시 쿠키는 `SameSite=None`, 도메인은 환경변수.
+- **CORS·쿠키** [이식]: 허용 출처를 환경변수로 받고(`blog.gamza.xyz`와 로컬) `credentials: true`. 쿠키는 `Cookie` 헤더를 직접 읽고(`m2-auth-plan.md` D6) `Secure`, 액세스 쿠키는 `SameSite=Lax`, 리프레시 쿠키는 `SameSite=None`, 도메인은 환경변수.
 - **프록시 신뢰 설정은 넣지 않는다** [제안]: 옛 앱도 포워딩 헤더 설정이 없었고 쿠키의 Secure를 고정으로 썼다. `res.cookie`로 직접 설정하면 요청이 HTTP로 들어와도 Secure 속성이 붙는다. 세션 라이브러리를 쓰게 되면 다시 본다.
 - **이미지 업로드** [이식]: 옛 검증을 그대로 옮긴다. 확인한 값은 프로필 이미지 기준으로 확장자 jpg·jpeg·png·gif, 최대 3MB(멀티파트 설정도 3MB)다. 글 이미지의 검증은 옛 `PostImageServiceUtil` 등을 읽고 맞춘다 [미검증].
 - **이미지 저장소** [제안]: `ImageStorage` 인터페이스 뒤에 두고, 구현은 S3 호환 클라이언트(`@aws-sdk/client-s3`, endpoint는 환경변수)로 한다. 옛 이미지 URL이 이미 S3를 가리키고, 저장소 종류는 인프라 단계에서 정해도 코드가 같다.
