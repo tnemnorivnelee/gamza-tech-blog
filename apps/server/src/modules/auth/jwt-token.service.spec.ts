@@ -173,4 +173,44 @@ describe('JwtTokenService', () => {
       expect(service.verify(makeToken())).toBeNull();
     });
   });
+
+  describe('remainingSeconds', () => {
+    afterEach(() => vi.useRealTimers());
+
+    // 액세스 수명은 위에서 7200초로 넣었다. 시간을 고정해야 초 단위 계산을 정확히 비교할 수 있다.
+    const issueAt = (iso: string) => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date(iso));
+      return service.createAccessToken('octocat');
+    };
+
+    it('남은 초를 버림으로 돌려준다', () => {
+      const token = issueAt('2030-01-01T00:00:00.000Z');
+      expect(service.remainingSeconds(token)).toBe(7200);
+      vi.setSystemTime(new Date('2030-01-01T00:01:40.500Z'));
+      expect(service.remainingSeconds(token)).toBe(7099);
+    });
+
+    it('1초가 안 남았으면 0이다', () => {
+      const token = issueAt('2030-01-01T00:00:00.000Z');
+      vi.setSystemTime(new Date('2030-01-01T01:59:59.500Z'));
+      expect(service.remainingSeconds(token)).toBe(0);
+    });
+
+    // verify와 달리 null이 아니라 예외다. 로그아웃은 이 예외를 그대로 밖으로 내보내 500이 된다(옛 동작).
+    it('만료된 토큰이면 던진다', () => {
+      const token = issueAt('2030-01-01T00:00:00.000Z');
+      vi.setSystemTime(new Date('2030-01-01T02:00:01.000Z'));
+      expect(() => service.remainingSeconds(token)).toThrow();
+    });
+
+    it('서명이 틀린 토큰이면 던진다', () => {
+      const token = issueAt('2030-01-01T00:00:00.000Z');
+      const [header, payload] = token.split('.');
+      expect(() =>
+        service.remainingSeconds(`${header}.${payload}.bad-signature`),
+      ).toThrow();
+      expect(() => service.remainingSeconds('not-a-jwt')).toThrow();
+    });
+  });
 });

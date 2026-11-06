@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApiBody, ApiOperation, ApiParam } from '@nestjs/swagger';
 import { Test } from '@nestjs/testing';
 import { PagedResponse } from '../../src/common/dto/paged-response.dto.js';
@@ -11,6 +12,8 @@ import {
   OkVoid,
 } from '../../src/common/swagger/api-decorators.js';
 import { setupSwagger } from '../../src/common/swagger/setup-swagger.js';
+import { AuthController } from '../../src/modules/auth/auth.controller.js';
+import { AuthService } from '../../src/modules/auth/auth.service.js';
 import { CommentListResponse } from '../../src/modules/comment/dto/comment-list-response.dto.js';
 import { CommentRequest } from '../../src/modules/comment/dto/comment-request.dto.js';
 import { CommentResponse } from '../../src/modules/comment/dto/comment-response.dto.js';
@@ -66,9 +69,19 @@ class FakeAdmissionController {
   }
 }
 
+// 인증 컨트롤러는 실제 클래스를 쓴다. 명세는 데코레이터만으로 만들어지므로 의존하는 부품은 빈 가짜로 채운다.
+// AuthModule을 통째로 넣으면 전역 가드가 따라와서 위 가짜 컨트롤러의 응답 시험이 로그인을 요구하게 된다.
 export async function createFakeApp() {
   const moduleRef = await Test.createTestingModule({
-    controllers: [FakeCommentController, FakeAdmissionController],
+    controllers: [
+      FakeCommentController,
+      FakeAdmissionController,
+      AuthController,
+    ],
+    providers: [
+      { provide: AuthService, useValue: {} },
+      { provide: ConfigService, useValue: {} },
+    ],
   }).compile();
   const app = moduleRef.createNestApplication();
   setupSwagger(app);

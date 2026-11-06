@@ -53,6 +53,15 @@ export class JwtTokenService {
     }
   }
 
+  // 토큰의 남은 수명(초, 버림). 로그아웃이 블랙리스트에 올릴 기간이다(옛 getRemainingAccessTokenValidity).
+  // verify와 달리 null로 바꾸지 않는다: 서명이 틀렸거나 만료된 토큰이면 예외가 그대로 나가고, 전역 필터가 500 C004로 만든다(옛 동작).
+  remainingSeconds(token: string): number {
+    const { exp } = this.jwt.verify<{ exp: number }>(token, {
+      algorithms: ['HS256'],
+    });
+    return Math.max(Math.floor(exp - Date.now() / 1000), 0);
+  }
+
   private sign(githubId: string, ttlSeconds: number): string {
     // expiresIn은 숫자면 초다(숫자 문자열은 밀리초로 읽힌다). jwtid는 토큰마다 다른 발급 번호다.
     return this.jwt.sign(
