@@ -230,6 +230,50 @@ describe('validateEnv', () => {
     });
   });
 
+  describe('OAUTH_* (로그인 뒤 이동 주소)', () => {
+    it('없으면 새 프론트(blog.gamza.xyz) 기본값을 쓴다', () => {
+      expect(validateEnv(base)).toMatchObject({
+        OAUTH_REDIRECT_DOMAIN_SUFFIX: 'gamza.xyz',
+        OAUTH_DEFAULT_LOCATION: 'blog',
+        OAUTH_ALLOWED_LOCATIONS: ['blog'],
+      });
+    });
+
+    it('허용 목록은 쉼표로 구분한 문자열을 배열로 바꾼다(공백과 빈 칸은 버린다)', () => {
+      const env = validateEnv({
+        ...base,
+        OAUTH_REDIRECT_DOMAIN_SUFFIX: 'example.org',
+        OAUTH_DEFAULT_LOCATION: 'app',
+        OAUTH_ALLOWED_LOCATIONS: ' app, dev ,,preview ',
+      });
+      expect(env).toMatchObject({
+        OAUTH_REDIRECT_DOMAIN_SUFFIX: 'example.org',
+        OAUTH_DEFAULT_LOCATION: 'app',
+        OAUTH_ALLOWED_LOCATIONS: ['app', 'dev', 'preview'],
+      });
+    });
+
+    // 정규식이 막아야 주소를 만들 때 아무 값이나 끼어들지 못한다(https://{location}.{접미사}).
+    it.each([
+      { OAUTH_ALLOWED_LOCATIONS: '' },
+      { OAUTH_ALLOWED_LOCATIONS: ',' },
+      { OAUTH_ALLOWED_LOCATIONS: 'blog,Dev' },
+      { OAUTH_ALLOWED_LOCATIONS: 'blog,evil.com' },
+      { OAUTH_ALLOWED_LOCATIONS: 'blog,a/b' },
+      { OAUTH_DEFAULT_LOCATION: '' },
+      { OAUTH_DEFAULT_LOCATION: 'Blog' },
+      { OAUTH_DEFAULT_LOCATION: 'a.b' },
+      { OAUTH_REDIRECT_DOMAIN_SUFFIX: '' },
+      { OAUTH_REDIRECT_DOMAIN_SUFFIX: 'localhost' },
+      { OAUTH_REDIRECT_DOMAIN_SUFFIX: 'gamza.xyz/path' },
+      { OAUTH_REDIRECT_DOMAIN_SUFFIX: 'gamza.xyz@evil.com' },
+    ])('모양이 틀리면 던진다 %o', (config) => {
+      expect(() => validateEnv({ ...base, ...config })).toThrow(
+        '환경변수가 올바르지 않습니다',
+      );
+    });
+  });
+
   it('오류 메시지에 비밀값을 싣지 않는다', () => {
     const tooShort = Buffer.alloc(16, 'z').toString('base64');
     let message = '';

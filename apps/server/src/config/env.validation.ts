@@ -2,6 +2,8 @@
 import 'reflect-metadata';
 import { plainToInstance, Transform } from 'class-transformer';
 import {
+  ArrayNotEmpty,
+  IsArray,
   IsBase64,
   IsIn,
   IsInt,
@@ -35,6 +37,9 @@ class MinDecodedBytes implements ValidatorConstraintInterface {
     return `${args.property}는 Base64로 풀었을 때 ${String(args.constraints[0])}바이트 이상이어야 합니다`;
   }
 }
+
+// 이동 주소의 location 한 칸(서브도메인 이름)의 모양.
+const LOCATION_LABEL = /^[a-z0-9-]+$/;
 
 // 필드 위의 @IsInt, @Min 같은 데코레이터는 "이 필드는 이런 값이어야 한다"는 검사 규칙을 붙인다(zod 스키마와 비슷하다).
 // 등호 뒤의 값은 환경변수가 없을 때 쓰는 기본값이다.
@@ -127,6 +132,29 @@ export class EnvironmentVariables {
     protocols: ['http', 'https'],
   })
   GITHUB_REDIRECT_URI?: string;
+
+  // 로그인이 끝난 뒤 프론트로 돌려보내는 주소 규칙(옛 GithubLoginProperties). 주소는 https://{location}.{접미사}이고,
+  // location은 콜백 요청의 쿼리 값을 허용 목록으로 걸러 쓴다(아무 주소로나 보내는 취약점을 막는다). 기본값은 새 프론트(blog.gamza.xyz)다.
+  // 정규식이 값을 소문자 영문·숫자·하이픈으로 제한해서, 주소를 만들 때 따로 걸러 낼 필요가 없다.
+  @Matches(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/)
+  OAUTH_REDIRECT_DOMAIN_SUFFIX: string = 'gamza.xyz';
+
+  @Matches(LOCATION_LABEL)
+  OAUTH_DEFAULT_LOCATION: string = 'blog';
+
+  // 쉼표로 구분한 목록(예: blog,dev). 문자열을 배열로 바꾼다. 비어 있으면 어떤 location도 못 쓰므로 막는다.
+  @Transform(({ value }) =>
+    typeof value === 'string'
+      ? value
+          .split(',')
+          .map((label) => label.trim())
+          .filter((label) => label !== '')
+      : value,
+  )
+  @IsArray()
+  @ArrayNotEmpty()
+  @Matches(LOCATION_LABEL, { each: true })
+  OAUTH_ALLOWED_LOCATIONS: string[] = ['blog'];
 }
 
 // 부팅 때 한 번 실행된다(ConfigModule이 부른다). 환경변수 객체를 EnvironmentVariables로 바꿔 규칙대로 검사하고,

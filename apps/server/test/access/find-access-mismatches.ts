@@ -6,6 +6,10 @@ import {
   resolveAccess,
 } from '../../src/modules/auth/access.decorator.js';
 
+// @ApiExcludeController가 붙은 컨트롤러는 프론트 계약(48개 작업)에 없어서 표에도 없다(옛 Spring Security 필터가 처리하던 로그인 경로).
+// 스웨거가 이 꼬리표의 이름을 내보내지 않아서 문자열로 적는다. 값은 [true]로 저장된다.
+const API_EXCLUDE_CONTROLLER = 'swagger/apiExcludeController';
+
 const show = (access: Access) =>
   access === 'public' ? 'public' : [...access].sort().join('|');
 
@@ -20,6 +24,9 @@ export function findAccessMismatches(
 
   for (const { metatype } of app.get(DiscoveryService).getControllers()) {
     if (typeof metatype !== 'function') continue;
+    const excluded = Reflect.getMetadata(API_EXCLUDE_CONTROLLER, metatype) as
+      boolean[] | undefined;
+    if (excluded?.[0]) continue;
     const prototype = metatype.prototype as Record<string, unknown>;
     for (const name of Object.getOwnPropertyNames(prototype)) {
       const handler = prototype[name];

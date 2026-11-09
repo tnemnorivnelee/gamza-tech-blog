@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { Controller, Get, Post } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
+import { ApiExcludeController } from '@nestjs/swagger';
 import { Test } from '@nestjs/testing';
 import { AppModule } from '../../src/app.module.js';
 import { Public, Roles } from '../../src/modules/auth/access.decorator.js';
@@ -95,6 +96,24 @@ describe('등록된 라우트와 표 비교', () => {
 
       helper() {} // 라우트가 아니라서 무시한다
     }
+
+    // 로그인 경로(GithubLoginController)는 프론트 계약에 없고 @ApiExcludeController로 명세에서도 뺀다. 표 비교에서도 뺀다.
+    @ApiExcludeController()
+    @Controller('hidden')
+    class HiddenController {
+      @Get('login')
+      startLogin() {} // 표에 없지만 명세에서 뺀 컨트롤러라서 어긋남으로 세지 않는다
+    }
+
+    it('명세에서 뺀 컨트롤러는 표 비교에서 빠진다', async () => {
+      const moduleRef = await Test.createTestingModule({
+        imports: [DiscoveryModule],
+        controllers: [HiddenController],
+      }).compile();
+
+      expect(findAccessMismatches(moduleRef, oldAccessRules)).toEqual([]);
+      await moduleRef.close();
+    });
 
     it('어긋난 규칙과 표에 없는 라우트를 모두 알려 준다', async () => {
       const moduleRef = await Test.createTestingModule({
