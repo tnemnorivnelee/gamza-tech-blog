@@ -157,7 +157,7 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
 
 - `.env.example`은 변수 **이름만** 두고, 실제 값은 레포에 두지 않는다. 옛 레포의 암호문 커밋 방식은 따르지 않는다.
 - `.gitignore`에 `*.sql`, `*.dump`, `*.sql.gz`, 덤프 보관 폴더를 넣는다(덤프에 개인정보가 있다).
-- 로컬 MySQL·Redis는 `apps/server/docker-compose.dev.yml`로 띄우고 Nest는 호스트에서 `yarn start:dev`로 실행한다. 이미지는 번호를 고정한다 [확정 2026-11-06]: `mysql:8.0.41`(기존 백업의 서버 버전과 같다), `redis:8.10.3`(사용자가 고른 최신 안정 버전이고 옛 Redis 서버 버전은 확인되지 않았다). 포트는 `127.0.0.1`에만 열고, 데이터는 이름 붙인 볼륨에 남기고, 비밀번호는 `apps/server/.env`에서 받는다. 루트의 `yarn dev:local`은 Compose의 `up --wait`와 두 서비스의 healthcheck(MySQL은 앱 계정으로 `SELECT 1`, Redis는 인증한 `PING`)가 통과한 뒤에 `yarn dev`를 실행한다 [확정 2026-11-06]. 배포용 Compose는 인프라 단계에서 따로 만든다.
+- 로컬 MySQL·Redis는 `apps/server/docker-compose.dev.yml`로 띄우고 Nest는 호스트에서 `yarn start:dev`로 실행한다. 이미지는 번호를 고정한다 [확정 2026-11-06]: `mysql:8.4.13`(운영을 MySQL 8.4로 정했다. 2026-11-10에 8.0.41에서 올렸다. 기존 백업은 8.0.41이고 8.4에 그대로 복원된다), `redis:8.10.3`(사용자가 고른 최신 안정 버전이고 옛 Redis 서버 버전은 확인되지 않았다). 포트는 `127.0.0.1`에만 열고, 데이터는 이름 붙인 볼륨에 남기고, 비밀번호는 `apps/server/.env`에서 받는다. 루트의 `yarn dev:local`은 Compose의 `up --wait`와 두 서비스의 healthcheck(MySQL은 앱 계정으로 `SELECT 1`, Redis는 인증한 `PING`)가 통과한 뒤에 `yarn dev`를 실행한다 [확정 2026-11-06]. 배포용 Compose는 인프라 단계에서 따로 만든다.
 - 이 컴퓨터에는 Docker가 없었는데 2026-11-06에 Docker Desktop을 설치했다(Docker 29.9.2, Compose v5.6.1, Mac arm64). Java는 이번에 다시 확인하지 않았다(앞서는 없었다).
 
 ## 11. 구현 순서
@@ -189,7 +189,7 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
 
 ## 13. 사용자가 해야 할 일
 
-1. ~~레포 위치와 이름 승인~~ 완료: `tnemnorivnelee/gamza-tech-blog` (비공개, 로컬 `~/projects/gamza-tech-blog`)
+1. ~~레포 위치와 이름 승인~~ 완료: `tnemnorivnelee/gamza-tech-blog` (공개로 확인함 2026-11-10, Secret scanning·push protection을 켬. 로컬 `~/projects/gamza-tech-blog`)
 2. **Node 24.22.2 설치**: `fnm install 24.22.2` (레포 루트의 `.nvmrc`가 이 버전을 가리킨다. 지금 Node 22.21.1로는 의존성 설치가 막힌다)
 3. ~~Docker Desktop 설치~~ 완료(2026-11-06): M2의 로컬 Redis와 M4의 로컬 MySQL에 필요하고, M8의 계약 전체 검사에도 쓴다
 4. 새 GitHub OAuth 앱 생성 (M3 전)
