@@ -101,6 +101,18 @@ export class EnvironmentVariables {
   @Transform(({ value }) => (value === '' ? undefined : value))
   REDIS_PASSWORD?: string;
 
+  // MySQL 접속 주소(Prisma가 쓴다). 모양은 mysql://사용자:비밀번호@호스트:포트/DB이름이고 비밀번호가 들어 있다. 검증 메시지에 값을 싣지 않는다.
+  // COOKIE_DOMAIN과 같은 규칙이다: 운영에서는 필수이고, 그 밖에서는 비워 둘 수 있다(DB 없이도 서버가 뜬다). 값이 있으면 개발에서도 모양을 검사한다.
+  // 비밀번호에 @, :, / 같은 글자가 있으면 주소 안에서 %로 인코딩해야 한다(로컬 Compose의 비밀번호는 영문·숫자뿐이라 해당 없다).
+  @Transform(({ value }) => (value === '' ? undefined : value))
+  @ValidateIf(
+    (env: EnvironmentVariables) =>
+      env.NODE_ENV === 'production' || env.DATABASE_URL !== undefined,
+  )
+  @IsNotEmpty()
+  @Matches(/^mysql:\/\/\S+$/)
+  DATABASE_URL?: string;
+
   // GitHub OAuth 앱 정보(로그인에 쓴다). COOKIE_DOMAIN과 같은 규칙이다: 운영에서는 필수이고, 그 밖에서는 비워 두면 서버는 뜨지만
   // 로그인 요청에서 막힌다(OAuth 앱을 만들기 전에도 개발 서버를 띄울 수 있게 한다). 값이 있으면 개발에서도 모양을 검사한다.
   // GITHUB_CLIENT_SECRET은 비밀이다. 검증 메시지에 값을 싣지 않는다.

@@ -9,6 +9,11 @@ const github = {
   GITHUB_CLIENT_SECRET: Buffer.alloc(8, 's').toString('hex'),
   GITHUB_REDIRECT_URI: 'http://localhost:3000/login/oauth2/code/github',
 };
+// 운영에서는 DB 주소도 필수다. 시험용 가짜 값이고, 비밀번호는 파일에 적지 않고 계산한다.
+const DB_PASSWORD = Buffer.alloc(8, 'd').toString('hex');
+const database = {
+  DATABASE_URL: `mysql://gamza:${DB_PASSWORD}@127.0.0.1:3306/gamza`,
+};
 
 describe('validateEnv', () => {
   it('값이 없으면 기본값을 쓴다', () => {
@@ -97,7 +102,7 @@ describe('validateEnv', () => {
     );
 
     it('운영에서는 필수다. 없거나 비어 있으면 던진다', () => {
-      const prod = { ...base, ...github, NODE_ENV: 'production' };
+      const prod = { ...base, ...github, ...database, NODE_ENV: 'production' };
       expect(() => validateEnv(prod)).toThrow('COOKIE_DOMAIN');
       expect(() => validateEnv({ ...prod, COOKIE_DOMAIN: '' })).toThrow(
         'COOKIE_DOMAIN',
@@ -158,6 +163,65 @@ describe('validateEnv', () => {
     });
   });
 
+  describe('DATABASE_URL', () => {
+    it('개발에서는 비워 둬도 된다', () => {
+      expect(validateEnv(base).DATABASE_URL).toBeUndefined();
+      expect(
+        validateEnv({ ...base, DATABASE_URL: '' }).DATABASE_URL,
+      ).toBeUndefined();
+    });
+
+    it('mysql:// 주소면 통과한다', () => {
+      expect(validateEnv({ ...base, ...database }).DATABASE_URL).toBe(
+        database.DATABASE_URL,
+      );
+    });
+
+    // 운영에서 빼먹으면 DB를 쓰는 요청에서야 깨진다. 부팅 때 막는다.
+    it('운영에서는 필수다. 없거나 비어 있으면 던진다', () => {
+      const prod = {
+        ...base,
+        ...github,
+        NODE_ENV: 'production',
+        COOKIE_DOMAIN: '.gamza.xyz',
+      };
+      expect(() => validateEnv(prod)).toThrow('DATABASE_URL');
+      expect(() => validateEnv({ ...prod, DATABASE_URL: '' })).toThrow(
+        'DATABASE_URL',
+      );
+      expect(validateEnv({ ...prod, ...database }).DATABASE_URL).toBe(
+        database.DATABASE_URL,
+      );
+    });
+
+    // 다른 DB 주소를 넣으면 prisma 명령이 엉뚱한 곳에 붙으므로 값이 있으면 개발에서도 막는다.
+    it.each([
+      'not a url',
+      'postgres://user@127.0.0.1:5432/db',
+      'mysql://',
+      'mysql:// 127.0.0.1/db',
+      'xmysql://127.0.0.1/db',
+    ])('mysql:// 주소가 아니면 던진다 %s', (url) => {
+      expect(() => validateEnv({ ...base, DATABASE_URL: url })).toThrow(
+        'DATABASE_URL',
+      );
+    });
+
+    it('오류 메시지에 비밀번호를 싣지 않는다', () => {
+      let message = '';
+      try {
+        validateEnv({
+          ...base,
+          DATABASE_URL: `postgres://gamza:${DB_PASSWORD}@127.0.0.1:5432/gamza`,
+        });
+      } catch (e) {
+        message = (e as Error).message;
+      }
+      expect(message).toContain('DATABASE_URL');
+      expect(message).not.toContain(DB_PASSWORD);
+    });
+  });
+
   describe('GITHUB_*', () => {
     it('개발에서는 비워 둬도 된다(OAuth 앱 없이도 서버가 뜬다)', () => {
       const env = validateEnv(base);
@@ -184,7 +248,7 @@ describe('validateEnv', () => {
       'GITHUB_CLIENT_SECRET',
       'GITHUB_REDIRECT_URI',
     ])('운영에서는 필수다. %s가 없거나 비어 있으면 던진다', (name) => {
-      const prod = { ...base, ...github, NODE_ENV: 'production' };
+      const prod = { ...base, ...github, ...database, NODE_ENV: 'production' };
       const { [name]: _removed, ...without } = prod as Record<string, string>;
       expect(() =>
         validateEnv({ ...without, COOKIE_DOMAIN: '.gamza.xyz' }),
@@ -198,6 +262,7 @@ describe('validateEnv', () => {
       const env = validateEnv({
         ...base,
         ...github,
+        ...database,
         NODE_ENV: 'production',
         COOKIE_DOMAIN: '.gamza.xyz',
       });

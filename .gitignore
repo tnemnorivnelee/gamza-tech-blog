@@ -14,5 +14,10 @@ coverage
 *.dump
 dump/
 dumps/
+# 단, Prisma 마이그레이션 SQL은 덤프가 아니라 테이블 구조(DDL)만 있는 코드라서 커밋한다(데이터 행이 들어가면 안 된다).
+!apps/server/prisma/migrations/**/migration.sql
 
 .DS_Store
+
+# Prisma가 생성하는 클라이언트(prisma generate). 커밋하지 않는다.
+apps/server/src/infra/prisma/generated/
