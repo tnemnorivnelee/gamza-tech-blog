@@ -152,5 +152,5 @@ modules/user/user.repository.ts   existsByGithubId, create 추가 (인메모리 
 ## 9. 사용자가 할 일
 
 1. 6절의 결정은 끝났다. D7(GitHub 토큰 보관)만 게시글 동기화를 이식하기 전에 묻는다.
-2. GitHub OAuth 앱 만들기는 M3-1 구현 때 단계별로 안내한다. 값(Client ID, Client Secret)은 `.env`에만 두고 채팅·커밋에 쓰지 않는다. 앱 설정에서 콜백 주소를 여러 개 넣을 수 있는지 그때 확인한다.
+2. GitHub OAuth 앱 만들기는 로그인을 직접 해 보는 M3-2 직전에 단계별로 안내한다(M3-1은 환경변수가 운영 밖에서 선택이라 앱 없이도 진행된다). 값(Client ID, Client Secret)은 `.env`에만 두고 채팅·커밋에 쓰지 않는다. 앱 설정에서 콜백 주소를 여러 개 넣을 수 있는지 그때 확인한다.
 3. 새 프론트가 쓸 `NEXT_PUBLIC_OAUTH_LOGIN_URL` 값은 백엔드 주소가 정해진 뒤 Vercel 환경변수에서 바꾼다(프론트 저장소 변경이 아니다).
