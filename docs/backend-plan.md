@@ -125,7 +125,8 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
 - Prisma는 [확정](조건부). **스키마를 손으로 쓰지 않고 `prisma db pull`로 만든 뒤 이름을 정리**한다 [제안]. 옛 DB는 `ddl-auto: update`로 자라서 마이그레이션 이력이 없으므로, 공식 베이스라이닝 절차로 "현재 상태 = 첫 마이그레이션"을 만든 뒤 이후 변경을 마이그레이션으로 관리한다.
 - **복잡한 쿼리는 `$queryRaw`를 repository 안에서만 허용**한다 [제안]. 옛 `PostQueryAdapter`(leftJoin 16개, groupBy 2개)와 고아 태그 정리(`NOT EXISTS`)가 대상이다. 억지로 ORM 문법에 맞추면 읽기 어렵다. 파라미터 바인딩(태그드 템플릿)만 쓴다.
 - 글 저장과 태그 연결은 `$transaction`으로 묶는다.
-- **[미검증, 덤프 후 확인]**: Prisma 버전(v7 고정 가능한가), DATETIME 시간대(9시간 어긋남 가능성), ENUM, MEDIUMTEXT, TINYINT(1) 매핑, `db pull` 결과 품질.
+- **[확인함, 2026-11-09]** Prisma는 7.10.1로 고정한다(npm `latest`가 8.0.0 릴리스 후보라서). 덤프의 날짜는 KST 벽시계 값으로 보인다 [추정]. TINYINT(1) 컬럼은 덤프에 없다. 상세는 `docs/m4-prisma-plan.md`.
+- **[미검증]**: Prisma가 DATETIME을 읽고 쓰는 시간대(9시간 어긋남 가능성), ENUM·MEDIUMTEXT 매핑, `db pull` 결과 품질.
 
 ## 8. 횡단 관심사
 
@@ -168,7 +169,7 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
 - **M3** GitHub 로그인 (새 OAuth 앱 필요). 콜백이 사용자를 찾거나 PRE_REGISTER로 만드는 부분은 `UserRepository`까지만 만들고, 실제 저장은 M4 뒤에 연결한다.
 
 **B. 덤프를 받은 뒤**
-- **M4** Prisma: 덤프 복원, `db pull`, 베이스라인, v7 검증, 시간대·ENUM 점검, 그리고 `UserRepository`의 Prisma 구현을 넣어 M2~M3와 연결
+- **M4** Prisma: 덤프 복원, `db pull`, 베이스라인, v7 검증, 시간대·ENUM 점검, 그리고 `UserRepository`의 Prisma 구현을 넣어 M2~M3와 연결 (복원은 끝났고 나머지는 M4-1~M4-3으로 나눈다. 상세는 `docs/m4-prisma-plan.md`)
 - **M5** 읽기 API(공개 13개 중심): 목록, 피드, 상세, 인기, 검색, 태그
 - **M6** 쓰기 API: 글 CRUD, 댓글, 좋아요, 소개, 프로필, 이미지 업로드, 관리자 승인
 - **M7** 챗봇(Gemini)과 응답 캐시
@@ -193,7 +194,7 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
 3. ~~Docker Desktop 설치~~ 완료(2026-11-06): M2의 로컬 Redis와 M4의 로컬 MySQL에 필요하고, M8의 계약 전체 검사에도 쓴다
 4. 새 GitHub OAuth 앱 생성 (M3 전)
 5. Gemini API 키 발급 (M7 전)
-6. DB 덤프 수령 (11/05경)
+6. ~~DB 덤프 수령~~ 완료(2026-11-09): 로컬 MySQL에 복원함(`github_tokens` 제외, `docs/m4-prisma-plan.md`)
 7. SSH 개인키를 `~/.ssh`로 옮기고 `chmod 600` (기존 할 일)
 8. AWS 콘솔에서 크레딧 잔액·만료일(2027-02-11), 계정 유형, 예산 알림 확인 (`docs/infra-notes.md`)
 
@@ -208,12 +209,12 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
 | openapi-generator가 이름 없는 응답 스키마의 `title`을 모델 이름으로 쓰는지(안 쓰면 프론트 타입 이름이 바뀐다, 15절) | M8 |
 | 같은 `title`의 이름 없는 스키마가 여러 작업에서 쓰일 때 하나의 모델로 합쳐지는지(`PagedResponsePostListResponse`는 여러 API가 공유한다) | M8 |
 | 생성기가 `allOf` 응답을 TypeScript로 어떻게 만드는지(`extends`, 교차 타입 등)와 프론트가 그대로 컴파일되는지 | M8 |
-| ADMIN 부여 경로(코드에는 없다. DB에 직접 넣은 것으로 추정) | M4 덤프 |
+| ADMIN 부여 경로(코드에는 없다. 덤프에 ADMIN 3명이 있어서 DB에 직접 넣은 것으로 추정한다) | 덤프에서 확인함(2026-11-09). 방법은 추정으로 둔다 |
 | role이 안 맞는 로그인 사용자의 응답 본문(진입점 본문은 확인함. 거부 처리기는 설정에 없어서 403 `J005` `ResponseDto` 모양으로 추정해 구현한다) | 덤프·운영 로그가 있으면 |
 | 옛 서버가 없는 경로·잘못된 JSON에 실제로 500을 줬는지(코드만 읽고 내린 판단이라 운영 중 응답은 못 봤다) | 덤프·운영 로그가 있으면 |
 | 옛 GitHub 로그인 스코프(암호문)와 성공 후 리다이렉트 규칙 | M3 |
-| Prisma 7의 MySQL `db pull` 품질, v7 고정 | M4 |
-| 날짜 형식과 시간대(9시간) | M4~M5 |
+| Prisma 7.10.1 고정은 확인함(2026-11-09). MySQL `db pull` 결과 품질 | M4-1 |
+| 날짜 형식(마이크로초가 응답에 있었는지)과 시간대(DB는 KST 벽시계로 보이고, Prisma가 읽고 쓰는 기준을 맞춰야 한다) | M4-2~M5 |
 | 글 저장 경로의 GitHub 커밋 호출 여부 | M6 |
 | 글 이미지 업로드의 검증 기준 | M6 |
 | 챗봇 응답 캐시 키·TTL, 횟수 설정이 실제로 적용됐는지 | M7 |
