@@ -54,5 +54,8 @@ jobs:
           DATABASE_URL: mysql://root@127.0.0.1:3306/gamza
       - run: yarn lint
       - run: yarn typecheck
+      # 사용자 저장소 시험이 위 MySQL(마이그레이션 적용된 gamza)에 붙는다. 못 붙으면 CI에서는 실패한다(건너뛰지 않는다).
       - run: yarn test
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/gamza
       - run: yarn build

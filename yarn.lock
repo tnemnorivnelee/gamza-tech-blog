@@ -466,6 +466,14 @@
   resolved "https://registry.yarnpkg.com/@oxlint/binding-win32-x64-msvc/-/binding-win32-x64-msvc-1.91.0.tgz#e6a59d8a5c6b810331a632f48839d4a4206e45ca"
   integrity sha512-DmpK0PthG66Bcz5Y4JqNbzXltzyLQtg3ofYpd25+ejm7kQYUM78VL1uIP/ZFct2781mwUyBX37LatFPCTVp35A==
 
+"@prisma/adapter-mariadb@7.10.1":
+  version "7.10.1"
+  resolved "https://registry.yarnpkg.com/@prisma/adapter-mariadb/-/adapter-mariadb-7.10.1.tgz#fb4b20132190f68e395fe51a8e6f060f4d82b0b2"
+  integrity sha512-wB7ZU1NpPlONqzMsCHMyXsNUwjNr2w72PAp3KimJVMCyXzrCmzhxdbxGgWFgT6N9RX+xnujYiWUN3AQF85TIQA==
+  dependencies:
+    "@prisma/driver-adapter-utils" "7.10.1"
+    mariadb "3.5.4"
+
 "@prisma/client-runtime-utils@7.10.1":
   version "7.10.1"
   resolved "https://registry.yarnpkg.com/@prisma/client-runtime-utils/-/client-runtime-utils-7.10.1.tgz#af603fe5cbcd44e381772a97fedbb1ee1d363a58"
@@ -518,6 +526,13 @@
     std-env "3.10.0"
     valibot "1.4.2"
     zeptomatch "2.1.0"
+
+"@prisma/driver-adapter-utils@7.10.1":
+  version "7.10.1"
+  resolved "https://registry.yarnpkg.com/@prisma/driver-adapter-utils/-/driver-adapter-utils-7.10.1.tgz#72c9bc9f5a7489e15ca7aefd1c195643924d42a3"
+  integrity sha512-DJ4c6xvVnm3s9ZUyql9nCUicADSqyvH+CjXRCM9L6m5zJxCNmebCElG6X4irICq3rosBwlX+S19Dxq/4IrZk3A==
+  dependencies:
+    "@prisma/debug" "7.10.1"
 
 "@prisma/engines-version@8.1.0-1.d1b3f377ca835d73fd50954a5e22128b9ebdd6b8":
   version "8.1.0-1.d1b3f377ca835d73fd50954a5e22128b9ebdd6b8"
@@ -883,7 +898,7 @@
     "@types/express-serve-static-core" "^5.0.0"
     "@types/serve-static" "^2"
 
-"@types/geojson@*":
+"@types/geojson@*", "@types/geojson@^7946.0.16":
   version "7946.0.16"
   resolved "https://registry.yarnpkg.com/@types/geojson/-/geojson-7946.0.16.tgz#8ebe53d69efada7044454e3305c19017d97ced2a"
   integrity sha512-6C8nqWur3j98U6+lXDfTUWIfgvZU+EumvpHKcYjujKH7woYyLj2sUmff0tRhrqM7BohUw7Pz3ZB1jj2gW9Fvmg==
@@ -911,7 +926,7 @@
   resolved "https://registry.yarnpkg.com/@types/ms/-/ms-2.1.0.tgz#052aa67a48eccc4309d7f0191b7e41434b90bb78"
   integrity sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==
 
-"@types/node@*":
+"@types/node@*", "@types/node@>=20":
   version "26.6.6"
   resolved "https://registry.yarnpkg.com/@types/node/-/node-26.6.6.tgz#9ed7b5817e728ed9216ef7c5b7d373fe3b777104"
   integrity sha512-MzQj+8Kx3XI40OmUAE6Qoh58ZMNstNNMwn2nfd3qWsfe7nDNSqJNzes4njhz6AHwrSHOffSLwXU6yb474Q4aog==
@@ -1578,7 +1593,7 @@ delaunator@5:
   dependencies:
     robust-predicates "^3.0.2"
 
-denque@2.1.0:
+denque@2.1.0, denque@^2.1.0:
   version "2.1.0"
   resolved "https://registry.yarnpkg.com/denque/-/denque-2.1.0.tgz#e93e1a6569fb5e66f16a3c2a2964617d349d6ab1"
   integrity sha512-HVQE3AAb/pxF8fQAoiqpvg9i3evqug3hoiwakOyZAwJm+6vZehbkYXZ0l4JxS+I3QxM97v5aaRNhj8v5oBhekw==
@@ -2258,6 +2273,11 @@ long@^5.3.2:
   resolved "https://registry.yarnpkg.com/long/-/long-5.3.2.tgz#1d84463095999262d7d7b7f8bfd4a8cc55167f83"
   integrity sha512-mNAgZ1GmyNhD7AuqnTG3/VQ26o760+ZYBPKjPvugO8+nLbYfX6TVpJPseBvopbdY+qpZ/lKUnmEc1LeZYS3QAA==
 
+lru-cache@^11.5.0:
+  version "11.5.3"
+  resolved "https://registry.yarnpkg.com/lru-cache/-/lru-cache-11.5.3.tgz#a7767b4034e35269562d2b9da2b185b5df70c421"
+  integrity sha512-U4N8FgzmWxc8k1VH8Kr6lQg18U7Fjvby6wXHVRX/ZZ7IwWbRMgrRbP0Wrb5q5NVinryp4SQampHKdvtecItxUg==
+
 lru.min@^1.1.0, lru.min@^1.1.4:
   version "1.1.5"
   resolved "https://registry.yarnpkg.com/lru.min/-/lru.min-1.1.5.tgz#bd32483f4e342261d0eb011b06d2219e6b5ef818"
@@ -2276,6 +2296,17 @@ magic-string@^0.30.21:
   integrity sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==
   dependencies:
     "@jridgewell/sourcemap-codec" "^1.5.5"
+
+mariadb@3.5.4:
+  version "3.5.4"
+  resolved "https://registry.yarnpkg.com/mariadb/-/mariadb-3.5.4.tgz#ae58f9e6faf0d298f027b248a47ed7303c06cc7d"
+  integrity sha512-3m0vdfgRkjle5/9hHl4R7rlVvnDA7QfuFSNkdIAQNROWKOS0J3b9IQK9HaZSCGEVKiDUbFXFiINfC+cmR5P/aA==
+  dependencies:
+    "@types/geojson" "^7946.0.16"
+    "@types/node" ">=20"
+    denque "^2.1.0"
+    iconv-lite "^0.7.2"
+    lru-cache "^11.5.0"
 
 math-intrinsics@^1.1.0:
   version "1.1.0"
