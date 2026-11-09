@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { EnvironmentVariables } from '../../config/env.validation.js';
 import { UserRepository } from '../user/user.repository.js';
@@ -12,10 +12,17 @@ const AUTHORIZE_URL = 'https://github.com/login/oauth/authorize';
 // (m3-github-login-plan.md D5).
 const SCOPES = ['read:user', 'user:email', 'repo'];
 
+// 오류에서 메시지만 꺼낸다. 로그에 객체 전체를 넣으면 요청 정보까지 딸려 나올 수 있어서 메시지만 쓴다.
+const describe = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+
 // 옛 Spring의 oauth2Login이 하던 일 중 우리 코드로 옮긴 부분과 OAuth2LoginSuccessHandler의 로그인 처리를 맡는다.
 // HTTP(세션, 쿠키, 이동)는 컨트롤러가 하고, 여기는 "무엇을 할지"만 있다.
 @Injectable()
 export class GithubLoginService {
+  // Nest의 로그 도구. 출력 앞에 클래스 이름이 붙는다.
+  private readonly logger = new Logger(GithubLoginService.name);
+
   constructor(
     private readonly github: GithubClient,
     private readonly users: UserRepository,
@@ -54,7 +61,8 @@ export class GithubLoginService {
     const githubId = `g_${profile.id}`;
 
     // 처음 온 사용자만 PRE_REGISTER로 만든다. 이미 있으면 이름·이메일을 포함해 아무것도 바꾸지 않는다(옛 registerIfNewUser).
-    if (!(await this.users.findByGithubId(githubId))) {
+    const existing = await this.users.findByGithubId(githubId);
+    if (!existing) {
       await this.users.create({
         githubId,
         role: 'PRE_REGISTER',
@@ -71,7 +79,37 @@ export class GithubLoginService {
       refreshToken,
       this.config.get('REFRESH_TOKEN_TTL_SECONDS', { infer: true }),
     );
+
+    // 이메일을 비공개로 둔 사용자는 비어 있다. 로그인마다 비었는지 다시 보고(첫 로그인만이 아니다), 비었을 때만 GitHub를 부른다.
+    // void: 끝나기를 기다리지 않는다. 옛 @Async 이벤트 처리기처럼 응답(302)은 이 일과 상관없이 나간다. 실패는 아래에서 삼킨다.
+    const email = existing ? existing.email : profile.email;
+    if (!email?.trim()) void this.fillEmail(githubId, githubToken);
+
     return { accessToken, refreshToken };
+  }
+
+  // 옛 GithubPostLoginHandler의 이메일 부분. 로그인은 이미 성공했으므로 어떤 실패도 던지지 않고 로그만 남긴다(improvement-candidates.md 16번).
+  private async fillEmail(
+    githubId: string,
+    githubToken: string,
+  ): Promise<void> {
+    let email: string;
+    try {
+      email = await this.github.fetchPrimaryEmail(githubToken);
+    } catch (error) {
+      // 인증된 주 이메일이 없거나 권한이 없는 사용자도 흔하다. 옛 코드도 debug 수준으로만 남기고 넘어갔다.
+      this.logger.debug(
+        `GitHub 주 이메일 조회를 건너뜀 githubId=${githubId} cause=${describe(error)}`,
+      );
+      return;
+    }
+    try {
+      await this.users.updateEmailIfEmpty(githubId, email);
+    } catch (error) {
+      this.logger.warn(
+        `로그인 뒤 이메일 저장 실패 githubId=${githubId} cause=${describe(error)}`,
+      );
+    }
   }
 
   // 로그인 뒤 프론트로 보낼 주소(옛 resolveRedirectUrl). location은 앞뒤 공백을 떼고 소문자로 바꿔서 허용 목록에 있으면 쓰고,

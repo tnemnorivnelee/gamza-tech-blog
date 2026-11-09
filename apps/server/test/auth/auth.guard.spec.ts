@@ -85,10 +85,10 @@ class PublicClassController {
 }
 
 const USERS = new Map<string, User>([
-  ['octo', { githubId: 'octo', role: 'USER' }],
-  ['boss', { githubId: 'boss', role: 'ADMIN' }],
-  ['newbie', { githubId: 'newbie', role: 'PRE_REGISTER' }],
-  ['waiting', { githubId: 'waiting', role: 'PENDING' }],
+  ['octo', { githubId: 'octo', role: 'USER', email: null }],
+  ['boss', { githubId: 'boss', role: 'ADMIN', email: null }],
+  ['newbie', { githubId: 'newbie', role: 'PRE_REGISTER', email: null }],
+  ['waiting', { githubId: 'waiting', role: 'PENDING', email: null }],
 ]);
 
 describe('AuthGuard', () => {

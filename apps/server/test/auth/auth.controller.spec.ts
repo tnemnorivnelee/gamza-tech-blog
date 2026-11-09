@@ -22,10 +22,10 @@ class PingController {
 }
 
 const USERS = new Map<string, User>([
-  ['octo', { githubId: 'octo', role: 'USER' }],
-  ['boss', { githubId: 'boss', role: 'ADMIN' }],
-  ['newbie', { githubId: 'newbie', role: 'PRE_REGISTER' }],
-  ['waiting', { githubId: 'waiting', role: 'PENDING' }],
+  ['octo', { githubId: 'octo', role: 'USER', email: null }],
+  ['boss', { githubId: 'boss', role: 'ADMIN', email: null }],
+  ['newbie', { githubId: 'newbie', role: 'PRE_REGISTER', email: null }],
+  ['waiting', { githubId: 'waiting', role: 'PENDING', email: null }],
 ]);
 
 const REFRESH_TTL = 2592000; // 30일(초). env 기본값이다.
