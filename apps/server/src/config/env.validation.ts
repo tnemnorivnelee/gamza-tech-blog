@@ -41,7 +41,26 @@ class MinDecodedBytes implements ValidatorConstraintInterface {
 // 이동 주소의 location 한 칸(서브도메인 이름)의 모양.
 const LOCATION_LABEL = /^[a-z0-9-]+$/;
 
+// "운영에서는 필수, 그 밖에서는 선택"인 필드에 붙인다. 필드 위의 이 한 줄이 아래 세 가지를 한꺼번에 적용한다.
+// 1) .env에 `KEY=`만 적어 둔 빈 문자열은 "없는 값"으로 본다.
+// 2) 운영(NODE_ENV=production)이거나 값이 있을 때만 이 필드의 검사를 실행한다. 개발에서 비워 두면 통과한다.
+// 3) 검사를 실행하는데 값이 없으면 실패한다(운영에서 빠뜨린 경우).
+// 값이 있으면 개발에서도 모양을 검사한다. 틀린 값은 부팅이 아니라 요청 때서야 터지기 때문이다.
+// 데코레이터는 (대상 클래스, 필드 이름)을 받는 그냥 함수라서, 여러 개를 직접 불러 하나로 묶을 수 있다.
+function RequiredInProduction(): PropertyDecorator {
+  return (target, key) => {
+    Transform(({ value }) => (value === '' ? undefined : value))(target, key);
+    // ValidateIf: 조건이 참일 때만 이 필드의 나머지 검사를 실행한다. 조건 함수는 (객체 전체, 이 필드의 값)을 받는다.
+    ValidateIf(
+      (env: EnvironmentVariables, value: unknown) =>
+        env.NODE_ENV === 'production' || value !== undefined,
+    )(target, key);
+    IsNotEmpty()(target, key);
+  };
+}
+
 // 필드 위의 @IsInt, @Min 같은 데코레이터는 "이 필드는 이런 값이어야 한다"는 검사 규칙을 붙인다(zod 스키마와 비슷하다).
+// 읽는 법: 필드 하나가 검사 목록 하나다. 위에서 아래로 붙은 규칙이 모두 맞아야 통과한다(@IsInt @Min(1) PORT = 정수이고 1 이상).
 // 등호 뒤의 값은 환경변수가 없을 때 쓰는 기본값이다.
 export class EnvironmentVariables {
   @IsIn(['development', 'test', 'production'])
@@ -76,13 +95,7 @@ export class EnvironmentVariables {
 
   // 쿠키의 Domain 속성(예: .gamza.xyz). 비우면 속성을 생략해서 요청한 호스트에만 붙는 쿠키가 된다(로컬 개발용).
   // 운영에서 빼먹으면 쿠키가 프론트 도메인과 공유되지 않아 로그인이 조용히 깨지므로, 운영에서는 필수로 막는다.
-  // @ValidateIf: 조건이 참일 때만 이 필드의 검사 규칙을 실행한다. 값이 있으면 개발에서도 모양을 검사한다(틀린 값은 요청마다 500이 된다).
-  @Transform(({ value }) => (value === '' ? undefined : value))
-  @ValidateIf(
-    (env: EnvironmentVariables) =>
-      env.NODE_ENV === 'production' || env.COOKIE_DOMAIN !== undefined,
-  )
-  @IsNotEmpty()
+  @RequiredInProduction()
   @Matches(/^\.?[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*$/)
   COOKIE_DOMAIN?: string;
 
@@ -102,42 +115,22 @@ export class EnvironmentVariables {
   REDIS_PASSWORD?: string;
 
   // MySQL 접속 주소(Prisma가 쓴다). 모양은 mysql://사용자:비밀번호@호스트:포트/DB이름이고 비밀번호가 들어 있다. 검증 메시지에 값을 싣지 않는다.
-  // COOKIE_DOMAIN과 같은 규칙이다: 운영에서는 필수이고, 그 밖에서는 비워 둘 수 있다(DB 없이도 서버가 뜬다). 값이 있으면 개발에서도 모양을 검사한다.
+  // 운영에서는 필수이고, 그 밖에서는 비워 둘 수 있다(DB 없이도 서버가 뜬다).
   // 비밀번호에 @, :, / 같은 글자가 있으면 주소 안에서 %로 인코딩해야 한다(로컬 Compose의 비밀번호는 영문·숫자뿐이라 해당 없다).
-  @Transform(({ value }) => (value === '' ? undefined : value))
-  @ValidateIf(
-    (env: EnvironmentVariables) =>
-      env.NODE_ENV === 'production' || env.DATABASE_URL !== undefined,
-  )
-  @IsNotEmpty()
+  @RequiredInProduction()
   @Matches(/^mysql:\/\/\S+$/)
   DATABASE_URL?: string;
 
-  // GitHub OAuth 앱 정보(로그인에 쓴다). COOKIE_DOMAIN과 같은 규칙이다: 운영에서는 필수이고, 그 밖에서는 비워 두면 서버는 뜨지만
-  // 로그인 요청에서 막힌다(OAuth 앱을 만들기 전에도 개발 서버를 띄울 수 있게 한다). 값이 있으면 개발에서도 모양을 검사한다.
-  // GITHUB_CLIENT_SECRET은 비밀이다. 검증 메시지에 값을 싣지 않는다.
-  @Transform(({ value }) => (value === '' ? undefined : value))
-  @ValidateIf(
-    (env: EnvironmentVariables) =>
-      env.NODE_ENV === 'production' || env.GITHUB_CLIENT_ID !== undefined,
-  )
-  @IsNotEmpty()
+  // GitHub OAuth 앱 정보(로그인에 쓴다). 운영에서는 필수이고, 그 밖에서는 비워 두면 서버는 뜨지만 로그인 요청에서 막힌다
+  // (OAuth 앱을 만들기 전에도 개발 서버를 띄울 수 있게 한다). GITHUB_CLIENT_SECRET은 비밀이다. 검증 메시지에 값을 싣지 않는다.
+  @RequiredInProduction()
   GITHUB_CLIENT_ID?: string;
 
-  @Transform(({ value }) => (value === '' ? undefined : value))
-  @ValidateIf(
-    (env: EnvironmentVariables) =>
-      env.NODE_ENV === 'production' || env.GITHUB_CLIENT_SECRET !== undefined,
-  )
-  @IsNotEmpty()
+  @RequiredInProduction()
   GITHUB_CLIENT_SECRET?: string;
 
   // GitHub 앱에 등록한 콜백 전체 주소(예: http://localhost:3000/login/oauth2/code/github). 코드를 토큰으로 바꿀 때도 같은 값을 보낸다.
-  @Transform(({ value }) => (value === '' ? undefined : value))
-  @ValidateIf(
-    (env: EnvironmentVariables) =>
-      env.NODE_ENV === 'production' || env.GITHUB_REDIRECT_URI !== undefined,
-  )
+  @RequiredInProduction()
   @IsUrl({
     require_protocol: true,
     require_tld: false,
