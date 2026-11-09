@@ -36,6 +36,19 @@ export function setAccessTokenCookie(
   });
 }
 
+// 로그인에서만 내려준다. reissue는 리프레시 쿠키를 다시 내려주지 않는다(옛 동작). 속성은 만료시킬 때와 같다.
+export function setRefreshTokenCookie(
+  res: Response,
+  token: string,
+  ttlSeconds: number,
+  domain?: string,
+): void {
+  res.cookie(REFRESH_COOKIE, token, {
+    ...refreshCookieOptions(domain),
+    maxAge: ttlSeconds * 1000,
+  });
+}
+
 // 두 쿠키를 Max-Age=0으로 만료시킨다. res.clearCookie는 Express 5에서 maxAge를 무시하고 Expires만 보내서(옛 서버는 Max-Age=0) 쓰지 않았다.
 export function expireAuthCookies(res: Response, domain?: string): void {
   res.cookie(ACCESS_COOKIE, '', { ...accessCookieOptions(domain), maxAge: 0 });
