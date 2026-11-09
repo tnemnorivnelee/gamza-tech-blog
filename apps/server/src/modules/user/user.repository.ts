@@ -9,7 +9,7 @@ export interface User {
   readonly email: string | null;
 }
 
-// 로그인이 처음 온 사용자를 만들 때 쓰는 값(옛 UserMapper.toEntity). 학번·기수·포지션은 가입 화면(M5)에서 채우므로 아직 없다.
+// 로그인이 처음 온 사용자를 만들 때 쓰는 값(옛 UserMapper.toEntity). 학번·기수·포지션은 가입 화면(프로필 쓰기 API, M6)에서 채우므로 아직 없다.
 // shortcut: 가드가 읽지 않는 필드(name, nickname)라서 User와 따로 둔다. M4에서 Prisma 모델에 맞춰 하나로 합친다.
 export interface NewUser extends User {
   readonly name: string;
