@@ -95,6 +95,38 @@ export class EnvironmentVariables {
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : value))
   REDIS_PASSWORD?: string;
+
+  // GitHub OAuth 앱 정보(로그인에 쓴다). COOKIE_DOMAIN과 같은 규칙이다: 운영에서는 필수이고, 그 밖에서는 비워 두면 서버는 뜨지만
+  // 로그인 요청에서 막힌다(OAuth 앱을 만들기 전에도 개발 서버를 띄울 수 있게 한다). 값이 있으면 개발에서도 모양을 검사한다.
+  // GITHUB_CLIENT_SECRET은 비밀이다. 검증 메시지에 값을 싣지 않는다.
+  @Transform(({ value }) => (value === '' ? undefined : value))
+  @ValidateIf(
+    (env: EnvironmentVariables) =>
+      env.NODE_ENV === 'production' || env.GITHUB_CLIENT_ID !== undefined,
+  )
+  @IsNotEmpty()
+  GITHUB_CLIENT_ID?: string;
+
+  @Transform(({ value }) => (value === '' ? undefined : value))
+  @ValidateIf(
+    (env: EnvironmentVariables) =>
+      env.NODE_ENV === 'production' || env.GITHUB_CLIENT_SECRET !== undefined,
+  )
+  @IsNotEmpty()
+  GITHUB_CLIENT_SECRET?: string;
+
+  // GitHub 앱에 등록한 콜백 전체 주소(예: http://localhost:3000/login/oauth2/code/github). 코드를 토큰으로 바꿀 때도 같은 값을 보낸다.
+  @Transform(({ value }) => (value === '' ? undefined : value))
+  @ValidateIf(
+    (env: EnvironmentVariables) =>
+      env.NODE_ENV === 'production' || env.GITHUB_REDIRECT_URI !== undefined,
+  )
+  @IsUrl({
+    require_protocol: true,
+    require_tld: false,
+    protocols: ['http', 'https'],
+  })
+  GITHUB_REDIRECT_URI?: string;
 }
 
 // 부팅 때 한 번 실행된다(ConfigModule이 부른다). 환경변수 객체를 EnvironmentVariables로 바꿔 규칙대로 검사하고,

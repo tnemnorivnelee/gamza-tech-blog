@@ -3,6 +3,12 @@ import { validateEnv } from './env.validation.js';
 // 테스트용 가짜 키. 값을 파일에 적지 않고 계산한다.
 const SECRET = Buffer.alloc(32, 'a').toString('base64');
 const base = { JWT_SECRET: SECRET };
+// 운영에서는 GitHub OAuth 앱 정보도 필수다. 시험용 가짜 값이고, 비밀값은 파일에 적지 않고 계산한다.
+const github = {
+  GITHUB_CLIENT_ID: 'test-client-id',
+  GITHUB_CLIENT_SECRET: Buffer.alloc(8, 's').toString('hex'),
+  GITHUB_REDIRECT_URI: 'http://localhost:3000/login/oauth2/code/github',
+};
 
 describe('validateEnv', () => {
   it('값이 없으면 기본값을 쓴다', () => {
@@ -91,7 +97,7 @@ describe('validateEnv', () => {
     );
 
     it('운영에서는 필수다. 없거나 비어 있으면 던진다', () => {
-      const prod = { ...base, NODE_ENV: 'production' };
+      const prod = { ...base, ...github, NODE_ENV: 'production' };
       expect(() => validateEnv(prod)).toThrow('COOKIE_DOMAIN');
       expect(() => validateEnv({ ...prod, COOKIE_DOMAIN: '' })).toThrow(
         'COOKIE_DOMAIN',
@@ -149,6 +155,78 @@ describe('validateEnv', () => {
       expect(() => validateEnv({ ...base, ...config })).toThrow(
         '환경변수가 올바르지 않습니다',
       );
+    });
+  });
+
+  describe('GITHUB_*', () => {
+    it('개발에서는 비워 둬도 된다(OAuth 앱 없이도 서버가 뜬다)', () => {
+      const env = validateEnv(base);
+      expect(env.GITHUB_CLIENT_ID).toBeUndefined();
+      expect(env.GITHUB_CLIENT_SECRET).toBeUndefined();
+      expect(env.GITHUB_REDIRECT_URI).toBeUndefined();
+      expect(
+        validateEnv({
+          ...base,
+          GITHUB_CLIENT_ID: '',
+          GITHUB_CLIENT_SECRET: '',
+          GITHUB_REDIRECT_URI: '',
+        }).GITHUB_CLIENT_ID,
+      ).toBeUndefined();
+    });
+
+    it('값을 주면 쓴다', () => {
+      expect(validateEnv({ ...base, ...github })).toMatchObject(github);
+    });
+
+    // 운영에서 빼먹으면 로그인이 요청 때서야 깨진다. 이름마다 따로 막히는지 본다.
+    it.each([
+      'GITHUB_CLIENT_ID',
+      'GITHUB_CLIENT_SECRET',
+      'GITHUB_REDIRECT_URI',
+    ])('운영에서는 필수다. %s가 없거나 비어 있으면 던진다', (name) => {
+      const prod = { ...base, ...github, NODE_ENV: 'production' };
+      const { [name]: _removed, ...without } = prod as Record<string, string>;
+      expect(() =>
+        validateEnv({ ...without, COOKIE_DOMAIN: '.gamza.xyz' }),
+      ).toThrow(name);
+      expect(() =>
+        validateEnv({ ...without, [name]: '', COOKIE_DOMAIN: '.gamza.xyz' }),
+      ).toThrow(name);
+    });
+
+    it('운영에서 모두 있으면 통과한다', () => {
+      const env = validateEnv({
+        ...base,
+        ...github,
+        NODE_ENV: 'production',
+        COOKIE_DOMAIN: '.gamza.xyz',
+      });
+      expect(env).toMatchObject(github);
+    });
+
+    // 틀린 콜백 주소는 로그인 때서야 GitHub가 거부하므로 값이 있으면 개발에서도 막는다.
+    it.each(['not a url', 'localhost:3000/callback', 'ftp://example.com/cb'])(
+      'GITHUB_REDIRECT_URI가 http(s) 주소가 아니면 던진다 %s',
+      (uri) => {
+        expect(() =>
+          validateEnv({ ...base, GITHUB_REDIRECT_URI: uri }),
+        ).toThrow('GITHUB_REDIRECT_URI');
+      },
+    );
+
+    it('오류 메시지에 비밀값을 싣지 않는다', () => {
+      let message = '';
+      try {
+        validateEnv({
+          ...base,
+          ...github,
+          GITHUB_REDIRECT_URI: 'not a url',
+        });
+      } catch (e) {
+        message = (e as Error).message;
+      }
+      expect(message).toContain('GITHUB_REDIRECT_URI');
+      expect(message).not.toContain(github.GITHUB_CLIENT_SECRET);
     });
   });
 

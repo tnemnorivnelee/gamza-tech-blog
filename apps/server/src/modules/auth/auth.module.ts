@@ -8,6 +8,8 @@ import { UserModule } from '../user/user.module.js';
 import { AuthController } from './auth.controller.js';
 import { AuthGuard } from './auth.guard.js';
 import { AuthService } from './auth.service.js';
+import { FetchGithubClient } from './fetch-github-client.js';
+import { GithubClient } from './github-client.js';
 import { JwtTokenService } from './jwt-token.service.js';
 import { RedisTokenStore } from './redis-token-store.js';
 import { TokenStore } from './token-store.js';
@@ -43,6 +45,8 @@ import { TokenStore } from './token-store.js';
     JwtTokenService,
     // "TokenStore를 달라는 곳에는 RedisTokenStore를 만들어 넣어 준다"는 뜻이다. 시험은 overrideProvider로 InMemoryTokenStore(가짜)를 끼운다.
     { provide: TokenStore, useClass: RedisTokenStore },
+    // GitHub에 보내는 요청 세 개. M3-2의 로그인 흐름이 GithubClient로 받아 쓴다. 시험은 가짜를 끼운다.
+    { provide: GithubClient, useClass: FetchGithubClient },
     // APP_GUARD라는 이름표로 등록하면 이 가드가 모든 요청에 적용된다(예외 필터의 APP_FILTER와 같은 방식).
     { provide: APP_GUARD, useClass: AuthGuard },
   ],
