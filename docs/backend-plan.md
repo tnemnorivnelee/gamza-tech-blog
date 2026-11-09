@@ -147,7 +147,7 @@ apps/server/src/      (모노레포 루트는 yarn 워크스페이스 "apps/*")
 ## 9. 테스트와 CI
 
 - **접근 규칙 표 테스트**: 옛 `SecurityConfig`와 `JwtSkipPathMatcher`를 계약 48개에 적용한 분류(데이터 파일은 M2-2에서 만든다)를 입력으로, 각 경로가 공개/로그인/ADMIN/특수 규칙대로 동작하는지 표 기반으로 검사한다. 값싸고 실수를 가장 잘 잡는다.
-- **단위 테스트**: 토큰 서비스(Redis는 가짜로 대체), 인증 가드, 에러 변환.
+- **단위 테스트**: 토큰 서비스(Redis는 가짜로 대체), 인증 가드, 에러 변환. 단, `RedisTokenStore` 자체는 가짜로 시험할 수 없어서 진짜 Redis로 시험한다(로컬은 Redis가 없으면 건너뛰고, CI는 서비스 컨테이너로 항상 실행. 2026-11-06 결정, `m2-auth-plan.md` D4).
 - **계약 검사**: 5절의 가벼운 diff를 CI에서 돌린다.
 - **e2e**: supertest와 실제 MySQL·Redis. GitHub Actions의 서비스 컨테이너를 쓰면 로컬 Docker 없이도 CI에서 돌릴 수 있다.
 - **CI는 lint → test → build까지만** 만든다. 배포는 인프라 단계에서 한다. 커버리지 수치 목표와 전체 스냅샷 테스트는 하지 않는다.

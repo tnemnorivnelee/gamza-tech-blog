@@ -112,6 +112,46 @@ describe('validateEnv', () => {
     );
   });
 
+  describe('REDIS_*', () => {
+    // 로컬 Compose는 127.0.0.1(IPv4)에만 연다. 기본값이 localhost면 ::1로 풀려 거부당할 수 있다.
+    it('없으면 로컬 Compose 주소를 쓰고, 비밀번호는 비어 있다', () => {
+      expect(validateEnv(base)).toMatchObject({
+        REDIS_HOST: '127.0.0.1',
+        REDIS_PORT: 6379,
+      });
+      expect(validateEnv(base).REDIS_PASSWORD).toBeUndefined();
+    });
+
+    it('값을 주면 쓴다. 포트 문자열은 숫자로 바뀌고 빈 비밀번호는 없는 것이다', () => {
+      const password = Buffer.alloc(8, 'p').toString('hex'); // 시험용 가짜 값. 파일에 적지 않고 계산한다.
+      const env = validateEnv({
+        ...base,
+        REDIS_HOST: 'redis.internal',
+        REDIS_PORT: '6380',
+        REDIS_PASSWORD: password,
+      });
+      expect(env).toMatchObject({
+        REDIS_HOST: 'redis.internal',
+        REDIS_PORT: 6380,
+        REDIS_PASSWORD: password,
+      });
+      expect(
+        validateEnv({ ...base, REDIS_PASSWORD: '' }).REDIS_PASSWORD,
+      ).toBeUndefined();
+    });
+
+    it.each([
+      { REDIS_HOST: '' },
+      { REDIS_PORT: 'abc' },
+      { REDIS_PORT: '0' },
+      { REDIS_PORT: '70000' },
+    ])('잘못된 값이면 던진다 %o', (config) => {
+      expect(() => validateEnv({ ...base, ...config })).toThrow(
+        '환경변수가 올바르지 않습니다',
+      );
+    });
+  });
+
   it('오류 메시지에 비밀값을 싣지 않는다', () => {
     const tooShort = Buffer.alloc(16, 'z').toString('base64');
     let message = '';

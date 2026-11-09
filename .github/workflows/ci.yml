@@ -11,6 +11,18 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # 시험하는 동안 옆에 띄우는 Redis. RedisTokenStore 시험이 진짜 Redis에 붙는다(비밀번호 없음, 기본 주소 127.0.0.1:6379).
+    # 이미지 번호는 로컬 Compose(apps/server/docker-compose.dev.yml)와 같게 둔다.
+    services:
+      redis:
+        image: redis:8.10.3
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
