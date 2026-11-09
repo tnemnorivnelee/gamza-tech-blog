@@ -1,6 +1,6 @@
 # M4 Prisma 계획
 
-작성일 2026-11-09 · 상태: 검토 대기 · 이슈 #39 · 관련: `backend-plan.md` 7절·11절, `improvement-candidates.md` 19~21번, `porting-principle.md`
+작성일 2026-11-09 · 상태: M4-1 구현됨(10절), M4-2부터 남음 · 이슈 #39, #41 · 관련: `backend-plan.md` 7절·11절, `improvement-candidates.md` 19~21번, `porting-principle.md`
 
 확인 기준: 복원한 로컬 DB를 직접 조회했고(개인정보 행은 보지 않고 합계만 봤다), 옛 백엔드 `potato-club/GamzaTechBlog-back`의 `master`는 읽기만 했다(코드를 실행하지 않았다). Prisma는 npm과 공식 문서로 확인했다. 표시: **[확인함]** 직접 확인, **[추정]** 자료로 짐작함, **[미검증]** 아직 확인할 방법이 없음.
 
@@ -23,7 +23,7 @@ M4에 넣는 것: 복원, Prisma 도입, 스키마, 베이스라인, 사용자 �
 
 ## 3. 복원 결과 [확인함]
 
-- 덤프 `gamzadb_full.sql`(MySQL 8.0.41, 567KB)을 로컬 컨테이너 MySQL 8.0.41의 `gamza` DB에 넣었다. 서버 버전이 같다.
+- 덤프 `gamzadb_full.sql`(MySQL 8.0.41, 567KB)을 로컬 컨테이너 MySQL 8.0.41의 `gamza` DB에 넣었다. 서버 버전이 같다. 운영은 MySQL 8.4로 정했다(D10). 같은 방식으로 임시 8.4.13 컨테이너에도 복원해서 테이블 13개, 외래 키 16개, 행 수가 모두 같음을 확인했다(컨테이너는 지웠다).
 - **`gamza` DB에 넣은 이유**: 덤프는 `gamzadb`라는 DB를 만들게 되어 있지만, 컨테이너의 `gamza` 사용자는 `gamza.*` 권한만 있다. 두 줄(`CREATE DATABASE`, `USE`)을 빼고 `gamza`에 넣어야 Prisma가 같은 사용자로 접속해도 테이블이 보인다. 컨테이너를 새로 만들지 않아도 된다.
 - **`github_tokens` 제외**: 평문 OAuth 토큰이라 복원이 금지돼 있다(`AGENTS.md`). `awk`로 그 테이블 구간을 걸러서 MySQL에 바로 흘려 넣었다. 개인정보가 든 임시 파일은 만들지 않았다. 원본(`~/Documents`)은 그대로다.
 - 덤프에는 트리거·뷰·프로시저·함수가 없다.
@@ -61,14 +61,16 @@ M4에 넣는 것: 복원, Prisma 도입, 스키마, 베이스라인, 사용자 �
 
 ## 6. 결정한 것 (옛 동작을 따르는 범위에서 구현 방법은 이유와 함께 정했다)
 
-- **D1. Prisma 7.10.1을 정확한 버전으로 고정한다**(`^` 없이, `prisma`와 `@prisma/client`와 어댑터 모두). 이유는 5절. 8의 정식판이 나오면 검토한다(개선 후보 20번).
-- **D2. 접속 정보는 `DATABASE_URL` 하나다.** `prisma` 명령과 앱이 같은 변수를 읽는다. 사용자가 `.env`에 직접 넣는다(비밀번호가 들어 있고, 비밀번호에 특수문자가 있으면 URL 인코딩이 필요하다). 필수 여부는 `REDIS_*`·`GITHUB_*`와 같은 방식을 M4-1에서 맞춘다. 검증 메시지에 값을 담지 않는다.
-- **D3. `created_at`·`updated_at`은 앱 코드가 채운다.** 옛 `@CreatedDate`·`@LastModifiedDate`와 같은 일을 한다. 스키마에 `@default(now())`·`@updatedAt`을 붙일지는 `db pull` 결과를 보고 M4-1에서 정한다.
+- **D1. Prisma 7.10.1을 정확한 버전으로 고정한다**(`^` 없이, `prisma`와 `@prisma/client`, 그리고 M4-2에서 더할 어댑터도 같은 버전). 이유는 5절. 8의 정식판이 나오면 검토한다(개선 후보 20번).
+- **D2. 접속 정보는 `DATABASE_URL` 하나다.** `prisma` 명령과 앱이 같은 변수를 읽는다. 사용자가 `.env`에 직접 넣는다(비밀번호가 들어 있고, 비밀번호에 특수문자가 있으면 URL 인코딩이 필요하다). 필수 여부는 `GITHUB_*`와 같은 방식이다(M4-1에서 구현): 운영(`NODE_ENV=production`)에서는 필수이고, 그 밖에서는 비워 둘 수 있다(DB 없이도 서버가 뜬다). 값이 있으면 `mysql://` 모양인지 검사한다. 검증 메시지에 값을 담지 않는다.
+- **D3. `created_at`·`updated_at`은 앱 코드가 채운다.** 옛 `@CreatedDate`·`@LastModifiedDate`와 같은 일을 한다. **스키마에 `@default(now())`·`@updatedAt`을 붙이지 않았다**(M4-1에서 정함). 이유 둘: 베이스라인은 실제 DB와 같아야 하는데 `@default(now())`를 붙이면 마이그레이션 SQL에 `DEFAULT CURRENT_TIMESTAMP`가 생겨 어긋난다. 그리고 Prisma 7은 이 값을 클라이언트가 UTC로 채우므로, 붙이는 순간 시간대(D7)가 조용히 UTC로 정해진다.
 - **D4. 모델 이름은 PascalCase 단수(`User`, `Post`, `PostTag`)로 정리하고 DB 이름은 `@@map`·`@map`으로 그대로 둔다.** 같은 DB를 쓰므로 테이블·컬럼 이름은 바꾸지 않는다. 정리한 뒤에는 `db pull`을 다시 돌리지 않는다(이름이 덮어써진다).
 - **D5. `github_tokens` 모델은 만들지 않는다.** 복원하지 않았고, GitHub 토큰 보관 방식은 게시글 동기화를 이식하기 전에 사용자에게 묻기로 했다(`m3-github-login-plan.md` D7).
 - **D6. 안 쓰는 테이블(`admission_results`, `projects`)도 스키마에 남긴다.** 빼면 이후 `migrate dev`가 그 테이블을 지우려 한다. 코드는 쓰지 않는다.
 - **D7. 시간대는 옛 동작대로 "KST 벽시계 값을 DB에 그대로 두고, 새로 쓰는 값도 같은 기준으로 쓴다."** 옛 행과 새 행이 9시간 어긋나면 안 되기 때문이다. Prisma가 `DATETIME`을 UTC로 읽고 쓰므로, 값을 어떻게 맞출지는 M4-2에서 실험으로 정한다(8절 1번). UTC로 바꾸는 것은 개선 후보 19번이다.
-- **D8. 사용자 저장소 시험은 진짜 MySQL로 한다.** CI에 `mysql:8.0.41` 서비스 컨테이너를 추가한다. 로컬에서 닿지 않으면 건너뛰고, CI(`CI=true`)에서 닿지 않으면 실패시킨다. Redis 시험과 같은 방식이다.
+- **D8. 사용자 저장소 시험은 진짜 MySQL로 한다.** CI에 `mysql:8.0.41` 서비스 컨테이너를 둔다(M4-1에서 마이그레이션 확인용으로 먼저 추가했다). 로컬에서 닿지 않으면 건너뛰고, CI(`CI=true`)에서 닿지 않으면 실패시킨다. Redis 시험과 같은 방식이다(M4-2).
+- **D9. 운영 DB는 EC2(t4g.small) 한 대 + RDS MySQL Single-AZ db.t4g.micro(1GB)로 간다**(사용자 결정, 2026-11-09). 1GB로 시작해 측정한 뒤 모자라면 올린다. 비교했던 안(월 비용은 전달받은 단가로 계산한 값이고 서울 단가는 [미검증]이다): A EC2에 MySQL 컨테이너 약 $21, **B RDS micro 약 $42**, C RDS small(2GB) 약 $61, D EC2 t4g.medium(4GB)에 MySQL 컨테이너 약 $36. 크레딧 $199.83이 2027-02-11에 끝나는데 B는 94일에 약 $131을 써서 약 $68이 남고, C는 약 $10만 남아 예상 밖 지출을 받을 수 없다. 이유: 학습·포트폴리오에 맞고(RDS 설정 경험), 옛 서비스도 RDS였으며, 자동 백업·패치가 있고, 데이터가 작아(덤프 567KB, 회원 15명) 나중에 A로 옮기는 비용이 낮다. 단점: 설정 단계가 늘고 크레딧이 끝난 뒤 월 $42가 계속 든다. **아직 AWS 리소스를 만들지 않았다.** 만들기 전에 확인할 것 [미검증]: 서울 EC2·RDS 시간당 단가, RDS 백업 무료 범위, 크레딧이 적용되는 서비스, 만료 후 자동 청구 여부, t3.small(이전 인수인계)과 t4g.small(ARM) 중 어느 것인지, 배포 이미지의 arm64 지원. 크레딧이 끝나기 전에(2027-02-11) 유지·축소·종료를 다시 정한다.
+- **D10. MySQL은 8.4로 간다**(사용자 결정, 2026-11-09). RDS의 8.0은 표준 지원이 2026-07-31에 끝나서 연장 지원료가 붙는다(vCPU당 시간 과금, 전달받은 서울 단가 $0.12는 [미검증]이고 문서에는 리전과 날짜에 따라 다르다고만 나온다). 9.x는 RDS에서 미리보기뿐이다. 8.4는 RDS 표준 지원이 2029-07-31까지다(AWS 문서 확인함). 옛 덤프(8.0.41)는 임시 8.4.13에 오류 없이 복원되고 행 수가 모두 같다. 이 DB의 외래 키 16개가 모두 기본 키를 가리켜서, 8.4가 기본으로 막는 "기본 키가 아닌 컬럼을 가리키는 외래 키"에 걸리지 않는다. **후속**: 로컬 Compose(`mysql:8.0.41`)와 CI의 MySQL 이미지를 8.4로 올리는 작은 PR을 M4-1 뒤에 따로 한다. 사용자의 `gamza-dev-mysql-1`을 새로 만들고 덤프를 다시 복원해야 하므로 그때 사용자 허락을 받는다. 그때까지 개발·CI는 8.0.41이다. RDS가 제공하는 8.4 마이너(문서상 8.4.5~8.4.11)는 만들 때 콘솔에서 확인한다.
 
 ## 7. 새 구조 [제안]
 
@@ -81,32 +83,57 @@ apps/server/
   src/modules/user/prisma-user.repository.ts   UserRepository의 Prisma 구현 (Prisma는 *.repository.ts에서만 import)
 ```
 
-생성되는 클라이언트 코드는 커밋하지 않는다. `prisma generate`를 빌드 전에 돌린다(위치와 스크립트는 M4-1에서 정한다). `UserModule`의 `useClass`만 `PrismaUserRepository`로 바꾸면 쓰는 쪽(가드, 로그인)은 그대로다. `InMemoryUserRepository`는 가드·로그인 시험이 쓰므로 남긴다.
+생성되는 클라이언트 코드(`src/infra/prisma/generated/`)는 커밋하지 않는다. `yarn install`의 `postinstall`이 `prisma generate`를 돌린다(M4-1). `UserModule`의 `useClass`만 `PrismaUserRepository`로 바꾸면 쓰는 쪽(가드, 로그인)은 그대로다. `InMemoryUserRepository`는 가드·로그인 시험이 쓰므로 남긴다.
 
 ## 8. 미검증
 
 1. **시간대 처리**: Prisma 7의 MariaDB 어댑터가 `DATETIME`을 어떤 시간대로 읽고 쓰는지. 실험: 새 행을 쓴 뒤 SQL로 날것의 값을 읽어 비교한다. M4-2.
-2. **`db pull` 결과 품질**: `ENUM`(role, position), `MEDIUMTEXT`, `DATETIME(6)`, `idx_post_created_at DESC` 인덱스, 하이버네이트가 붙인 외래 키 이름(`FK7h83...`). M4-1.
+2. ~~`db pull` 결과 품질~~ **[확인함, M4-1]** `ENUM`(role, position), `MEDIUMTEXT`, `DATETIME(6)`, `idx_post_created_at DESC` 인덱스, 하이버네이트가 붙인 외래 키 이름(`FK7h83...`)이 모두 정확히 들어왔다(10절).
 3. **마이크로초**: DB는 `DATETIME(6)`(마이크로초)인데 JS `Date`는 밀리초까지다. 옛 응답 JSON이 마이크로초까지 보냈다면(Spring 기본 설정에서 `LocalDateTime`은 0이 아닌 자리까지 찍는 것이 보통이다 **[추정]**) 새 응답은 밀리초에서 잘려 달라진다 **[미검증]**. 읽기 API를 옮기는 M5에서 계약과 함께 본다.
 4. **어댑터 설정 방식**(연결 문자열인지 옵션 객체인지)과 로컬 MySQL 8의 인증 방식(`caching_sha2_password`)에 필요한 옵션. M4-2.
-5. **생성기의 ESM 출력과 우리 규칙**(상대 import는 `.js`로 끝낸다)이 맞는지. M4-1.
+5. ~~생성기의 ESM 출력과 우리 규칙~~ **[확인함, M4-1]** `importFileExtension = "js"`로 상대 import가 `.js`로 끝나고, 생성물을 `src` 안에 두면 `dist/main.js` 구조가 그대로다.
 6. **`migrate dev`는 임시(shadow) DB를 만들 권한이 필요한데 `gamza` 사용자에게는 없다.** 베이스라인과 `migrate diff`는 필요 없으므로 지금은 걸리지 않는다. 이후 스키마를 바꿀 때 다시 본다.
 
 ## 9. 작업 분할 [제안]
 
 각각 이슈 → 브랜치 → PR이고, 모두 `lint`·`typecheck`·`test`·`build`를 통과해야 한다.
 
-1. **M4-1 Prisma 도입과 스키마**: 7.10.1 고정 설치, `prisma.config.ts`, `db pull`, 이름 정리, `0_init` 베이스라인(로컬 DB에는 `migrate resolve --applied`), 클라이언트 생성, `DATABASE_URL` 검증과 `.env.example`. 시험: 빈 MySQL에 `0_init`을 적용한 결과가 스키마 파일과 같은지 CI에서 비교한다. 선행: 사용자가 `.env`에 `DATABASE_URL` 추가.
+1. **M4-1 Prisma 도입과 스키마** (구현됨, 10절): 7.10.1 고정 설치, `prisma.config.ts`, `db pull`, 이름 정리, `0_init` 베이스라인(로컬 DB에는 `migrate resolve --applied`), 클라이언트 생성, `DATABASE_URL` 검증과 `.env.example`. 시험: 빈 MySQL에 `0_init`을 적용한 결과가 스키마 파일과 같은지 CI에서 비교한다. 어댑터(`@prisma/adapter-mariadb`)는 접속하는 M4-2에서 더한다.
 2. **M4-2 사용자 저장소 연결**: `PrismaModule`·`PrismaService`, `PrismaUserRepository`(`findByGithubId`, `create`, `updateEmailIfEmpty`), `UserModule` 교체, 시간대 실험과 결정(D7), 실제 MySQL 시험, CI MySQL 서비스. 시험: 찾기, 만들기(필드·시각), 이메일은 비어 있을 때만 채움, 같은 `github_id`나 닉네임 중복 처리. 선행: vitest가 `.env`의 `DATABASE_` 접두사 값을 읽는 것을 사용자가 허락(`REDIS_`와 같은 방식).
 3. **M4-3 확인과 정리**: 코드에 남긴 `shortcut:` 주석을 모아 M4 시점에 풀 것을 확인하고 이 문서와 `backend-plan.md`를 사실에 맞게 고친다. 사용자가 실제 GitHub 로그인으로 기존 계정이 role을 유지하는지 확인한다.
 
-## 10. 문서 정정
+## 10. M4-1 구현 결과 [확인함]
 
-이 PR에서 `improvement-candidates.md`에 19~21번을 더하고, `backend-plan.md`는 7절 마지막 줄, 11절 M4, 13절 6번, 14절의 세 항목(ADMIN, Prisma, 시간대)만 사실에 맞춘다.
+**만든 것**: `prisma`·`@prisma/client` 7.10.1(고정), `apps/server/prisma.config.ts`, `apps/server/prisma/schema.prisma`(모델 13개, enum 3개), `prisma/migrations/0_init`(테이블 13개, 외래 키 16개), `postinstall`의 `prisma generate`, `.gitignore`(생성물 무시, 마이그레이션 SQL 예외), `DATABASE_URL` 검증과 `.env.example`, CI(MySQL 서비스 컨테이너, 마이그레이션 적용, 스키마 비교).
 
-## 11. 사용자가 할 일
+**`db pull` 품질**: 13개 모델과 ENUM 3개, `MEDIUMTEXT`, `TINYTEXT`, `DATETIME(6)`, 내림차순 인덱스, 하이버네이트가 붙인 인덱스·외래 키 이름이 정확히 들어왔다. 고친 것은 이름뿐이다(D4): 모델은 테이블 이름 그대로(`users`, `posts`)라서 PascalCase 단수로, 컬럼은 camelCase로 바꾸고 옛 이름은 `@map`으로 남겼다. 자기 참조 관계(대댓글)는 `parent`·`replies`로 이름을 붙였고, `db pull`이 지운 주석은 다시 적었다.
 
-1. M4-1 직전: `apps/server/.env`에 `DATABASE_URL`을 추가한다. 형식은 `mysql://gamza:<비밀번호>@127.0.0.1:3306/gamza`이고, 값은 이미 `.env`에 있는 `MYSQL_*`와 같은 사용자·비밀번호다. 값은 채팅과 커밋에 쓰지 않는다.
-2. M4-2 직전: vitest가 `.env`의 `DATABASE_` 접두사 값만 읽어도 되는지 알려 준다.
-3. 원본 덤프와 `s3-backup`(`~/Documents`)은 사용자의 파일이라 그대로 뒀다. 복원은 끝났고 작업 사본은 만들지 않았다. 개인정보가 있으니 보관 위치는 사용자가 정한다.
-4. 옛 운영 서버의 JWT 비밀값·DB 비밀번호·스토리지 키가 아직 쓰이고 있다면 교체한다(`AGENTS.md`). 새 서버는 새 값을 쓰므로 배포 단계에서 다시 짚는다.
+**확인한 방법과 결과**
+
+1. 정리한 스키마와 실제 로컬 DB를 `prisma migrate diff --exit-code`로 비교: 차이 없음(0). 컬럼 길이를 바꾼 사본과 인덱스를 지운 사본은 각각 2(차이 있음)가 나와서, 이 검사가 어긋남을 잡는 것을 확인했다.
+2. 빈 MySQL 8.0.41에 `0_init`을 적용하고 실제 DB와 `information_schema`로 비교(테이블 엔진·정렬 규칙, 컬럼 타입·널 허용·기본값·문자셋, 인덱스 열 순서·내림차순, 외래 키 이름·규칙): 148개 항목이 모두 같다.
+3. `node_modules`·`.env`·생성물이 없는 깨끗한 사본에서 `yarn install`(`postinstall`) → 마이그레이션 적용 → 스키마 비교 → `lint`·`typecheck`·`test`·`build` 통과(313 통과, 14 건너뜀: 로컬에 Redis 접속 정보가 없는 Redis 시험).
+4. `DATABASE_URL` 검증의 변이 6개(운영 필수 조건 제거, 정규식 앞·끝 고정 제거 등)는 모두 시험이 잡았다.
+
+**알게 된 함정**
+
+1. **정렬 규칙이 다르게 만들어진다.** Prisma가 만드는 SQL은 테이블마다 `COLLATE utf8mb4_unicode_ci`를 박는데 실제 DB는 MySQL 8 기본값 `utf8mb4_0900_ai_ci`다. Prisma의 비교는 정렬 규칙을 보지 않아서 "차이 없음"이 나오지만, 이 SQL로 새 DB를 만들면 운영 DB와 달라진다. `0_init`의 13곳을 `utf8mb4_0900_ai_ci`로 고쳤다. 앞으로 Prisma가 만드는 마이그레이션도 새 테이블에 `unicode_ci`를 박으므로, 새 테이블을 만들 때 직접 확인해야 한다.
+2. **`.gitignore`의 `*.sql`(덤프 방지)이 마이그레이션 SQL을 막았다.** 깨끗한 사본에서 "적용할 마이그레이션 없음"이 나와서 알았다. 구조(DDL)만 있는 `migration.sql`은 예외로 풀었다. 데이터 행(`INSERT`)이 들어가면 안 된다.
+3. **`env('DATABASE_URL')`은 값이 없으면 `generate`까지 막는다.** `postinstall`이 `.env` 없는 새 클론과 CI에서 깨지므로, 주소가 있을 때만 `datasource`를 넘기게 했다. DB가 필요한 명령(`db pull`, `migrate`)은 주소가 없으면 "The datasource.url property is required"로 멈춘다.
+4. **`BigInt` 컬럼은 JS `bigint`로 나온다.** `JSON.stringify`가 다루지 못하므로 응답에 실을 때 `Number(...)`로 바꿔야 한다(M5).
+5. `prisma` 패키지가 `@prisma/studio-core` 등 무거운 의존을 끌고 온다. 개발 의존성이라 서버 배포 이미지에는 필요 없다.
+
+**로컬 DB에 한 일**: `prisma migrate resolve --applied 0_init`으로 `_prisma_migrations` 표 하나를 추가했다(SQL은 실행하지 않았다). 로컬 컨테이너를 8.4로 새로 만들어 덤프를 다시 복원하면 이 표가 사라지므로, 그때 한 번 더 표시해야 한다.
+
+## 11. 문서 정정
+
+이 PR에서 `improvement-candidates.md`에 19~21번을 더하고, `backend-plan.md`는 7절 마지막 줄, 11절 M4, 13절 6번, 14절의 세 항목(ADMIN, Prisma, 시간대)만 사실에 맞췄다.
+
+## 12. 사용자가 할 일
+
+1. ~~M4-1 직전: `.env`에 `DATABASE_URL` 추가~~ 완료.
+2. M4-2 직전: vitest가 `.env`의 `DATABASE_` 접두사 값만 읽어도 되는지 알려 준다(`REDIS_`와 같은 방식).
+3. 로컬 Compose를 MySQL 8.4로 올릴 때(D10): `gamza-dev-mysql-1`을 새로 만들고 덤프를 다시 복원하는 것을 허락한다.
+4. AWS 리소스를 만들기 전(D9): 서울 단가, 백업 무료 범위, 크레딧 적용 서비스, 만료 후 자동 청구 여부, 인스턴스 종류를 콘솔과 계산기로 확인한다.
+5. 원본 덤프와 `s3-backup`(`~/Documents`)은 사용자의 파일이라 그대로 뒀다. 작업 사본은 만들지 않았고, 임시 컨테이너는 모두 지웠다. 개인정보가 있으니 보관 위치는 사용자가 정한다.
+6. 옛 운영 서버의 JWT 비밀값·DB 비밀번호·스토리지 키가 아직 쓰이고 있다면 교체한다(`AGENTS.md`). 새 서버는 새 값을 쓰므로 배포 단계에서 다시 짚는다.

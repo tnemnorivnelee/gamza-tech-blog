@@ -23,13 +23,36 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      # 마이그레이션 확인용 MySQL(비밀번호 없는 일회용). 이미지 번호는 로컬 Compose와 같게 둔다. 운영을 MySQL 8.4로 정했으므로(m4-prisma-plan.md D10)
+      # Compose를 8.4로 올릴 때 이 번호도 같이 올린다.
+      mysql:
+        image: mysql:8.0.41
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_DATABASE: gamza
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: yarn
+      # 설치할 때 postinstall이 Prisma 클라이언트를 만든다(생성물은 커밋하지 않는다).
       - run: yarn install --frozen-lockfile
+      # 마이그레이션 확인: 빈 MySQL에 마이그레이션을 적용한 결과가 schema.prisma와 같은지 본다(--exit-code: 차이가 있으면 실패).
+      # schema.prisma만 고치고 마이그레이션을 빠뜨리는 실수를 막는다. 비밀번호 없는 일회용 DB라서 주소에 비밀이 없다.
+      - run: yarn workspace @gamza/server prisma migrate deploy
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/gamza
+      - run: yarn workspace @gamza/server prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/gamza
       - run: yarn lint
       - run: yarn typecheck
       - run: yarn test

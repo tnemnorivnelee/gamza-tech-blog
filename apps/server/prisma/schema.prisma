@@ -1,0 +1,243 @@
+// Prisma 스키마: DB 구조의 단일 출처다. 여기서 타입 있는 DB 클라이언트가 생성된다. 접속 주소는 prisma.config.ts에 있다(Prisma 7).
+//
+// `prisma db pull`로 옛 DB를 읽어 만든 뒤 이름만 정리했다. 코드에서는 PascalCase 모델과 camelCase 필드를 쓰고,
+// 실제 테이블·컬럼 이름은 @@map·@map으로 옛 DB 그대로 둔다(같은 DB를 쓰므로 이름을 바꾸면 안 된다).
+// 인덱스·외래 키 이름(map:)도 하이버네이트가 붙인 옛 이름 그대로다. 그래야 마이그레이션이 현재 DB와 차이 없이 맞는다.
+// 정리한 뒤에는 db pull을 다시 돌리지 않는다(이름이 덮어써진다). 구조를 바꿀 때는 이 파일을 고치고 마이그레이션을 만든다.
+//
+// 참고: BigInt 컬럼은 JS의 bigint로 나온다. bigint는 JSON.stringify가 못 다루므로 응답에 실을 때 Number(...)로 바꿔야 한다(M5).
+// 참고: created_at·updated_at은 DB 기본값이 없다(옛 서버가 코드로 채웠다). 쓰는 쪽 코드가 채운다(m4-prisma-plan.md D3, D7).
+
+generator client {
+  provider            = "prisma-client"
+  // 생성되는 코드는 커밋하지 않는다(.gitignore). 빌드 결과(dist)의 구조를 지키려고 src 안에 둔다.
+  output              = "../src/infra/prisma/generated"
+  moduleFormat        = "esm"
+  // 이 프로젝트는 상대 import를 .js로 끝낸다(ESM).
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// 합격 조회(1차 범위 밖). 테이블이 DB에 있으므로 스키마에 남긴다(빼면 이후 migrate가 지우려 한다).
+model AdmissionResult {
+  admissionId    BigInt          @id @default(autoincrement()) @map("admission_id")
+  createdAt      DateTime        @map("created_at") @db.DateTime(6)
+  updatedAt      DateTime        @map("updated_at") @db.DateTime(6)
+  name           String          @db.VarChar(100)
+  nameNormalized String          @map("name_normalized") @db.VarChar(100)
+  phoneDigits    String          @map("phone_digits") @db.VarChar(20)
+  status         AdmissionStatus
+
+  @@unique([nameNormalized, phoneDigits], map: "uq_admission_name_phone")
+  @@map("admission_results")
+}
+
+model Comment {
+  commentId       BigInt    @id @default(autoincrement()) @map("comment_id")
+  createdAt       DateTime  @map("created_at") @db.DateTime(6)
+  updatedAt       DateTime  @map("updated_at") @db.DateTime(6)
+  content         String    @db.MediumText
+  parentCommentId BigInt?   @map("parent_comment_id")
+  postId          BigInt    @map("post_id")
+  userId          BigInt    @map("user_id")
+  // 대댓글: parent는 부모 댓글, replies는 이 댓글에 달린 대댓글들이다(같은 모델끼리의 관계는 이름표 "CommentReplies"로 짝을 맞춘다).
+  parent          Comment?  @relation("CommentReplies", fields: [parentCommentId], references: [commentId], onDelete: NoAction, onUpdate: NoAction, map: "FK7h839m3lkvhbyv3bcdv7sm4fj")
+  replies         Comment[] @relation("CommentReplies")
+  user            User      @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "FK8omq0tc18jd43bu5tjh6jvraq")
+  post            Post      @relation(fields: [postId], references: [postId], onDelete: NoAction, onUpdate: NoAction, map: "FKh4c7lvsc298whoyd4w9ta25cr")
+
+  @@index([parentCommentId], map: "FK7h839m3lkvhbyv3bcdv7sm4fj")
+  @@index([userId], map: "FK8omq0tc18jd43bu5tjh6jvraq")
+  @@index([postId], map: "FKh4c7lvsc298whoyd4w9ta25cr")
+  @@map("comments")
+}
+
+model CommitHistory {
+  commitHistoryId BigInt     @id @default(autoincrement()) @map("commit_history_id")
+  createdAt       DateTime   @map("created_at") @db.DateTime(6)
+  updatedAt       DateTime   @map("updated_at") @db.DateTime(6)
+  commitMessage   String?    @map("commit_message") @db.VarChar(255)
+  commitSha       String     @map("commit_sha") @db.VarChar(255)
+  repositoryId    BigInt     @map("repository_id")
+  postId          BigInt     @map("post_id")
+  post            Post       @relation(fields: [postId], references: [postId], onDelete: Cascade, onUpdate: NoAction, map: "FK_commit_history_post")
+  repository      Repository @relation(fields: [repositoryId], references: [repositoryId], onDelete: NoAction, onUpdate: NoAction, map: "FKf9u6rea2lgma9w9w244yg04i8")
+
+  @@index([postId], map: "FK_commit_history_post")
+  @@index([repositoryId], map: "FKf9u6rea2lgma9w9w244yg04i8")
+  @@map("commit_history")
+}
+
+model Introduction {
+  introId   BigInt   @id @default(autoincrement()) @map("intro_id")
+  createdAt DateTime @map("created_at") @db.DateTime(6)
+  updatedAt DateTime @map("updated_at") @db.DateTime(6)
+  content   String   @db.MediumText
+  userId    BigInt   @unique(map: "uk_introductions_user") @map("user_id")
+  user      User     @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "FK3w62f9amh41y0tvukmhwmg1mu")
+
+  @@map("introductions")
+}
+
+model Like {
+  likeId    BigInt   @id @default(autoincrement()) @map("like_id")
+  createdAt DateTime @map("created_at") @db.DateTime(6)
+  updatedAt DateTime @map("updated_at") @db.DateTime(6)
+  postId    BigInt   @map("post_id")
+  userId    BigInt   @map("user_id")
+  user      User     @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "FKnvx9seeqqyy71bij291pwiwrg")
+  post      Post     @relation(fields: [postId], references: [postId], onDelete: NoAction, onUpdate: NoAction, map: "FKry8tnr4x2vwemv2bb0h5hyl0x")
+
+  @@index([userId], map: "FKnvx9seeqqyy71bij291pwiwrg")
+  @@index([postId], map: "FKry8tnr4x2vwemv2bb0h5hyl0x")
+  @@map("likes")
+}
+
+model PostImage {
+  postImageId BigInt   @id @default(autoincrement()) @map("post_image_id")
+  createdAt   DateTime @map("created_at") @db.DateTime(6)
+  updatedAt   DateTime @map("updated_at") @db.DateTime(6)
+  imageUrl    String   @map("image_url") @db.VarChar(2048)
+  postId      BigInt   @map("post_id")
+  post        Post     @relation(fields: [postId], references: [postId], onDelete: NoAction, onUpdate: NoAction, map: "FKo1i5va2d8de9mwq727vxh0s05")
+
+  @@index([postId], map: "FKo1i5va2d8de9mwq727vxh0s05")
+  @@map("post_images")
+}
+
+model PostTag {
+  postTagId BigInt   @id @default(autoincrement()) @map("post_tag_id")
+  createdAt DateTime @map("created_at") @db.DateTime(6)
+  updatedAt DateTime @map("updated_at") @db.DateTime(6)
+  postId    BigInt   @map("post_id")
+  tagId     BigInt   @map("tag_id")
+  post      Post     @relation(fields: [postId], references: [postId], onDelete: NoAction, onUpdate: NoAction, map: "FKkifam22p4s1nm3bkmp1igcn5w")
+  tag       Tag      @relation(fields: [tagId], references: [tagId], onDelete: NoAction, onUpdate: NoAction, map: "FKm6cfovkyqvu5rlm6ahdx3eavj")
+
+  @@index([postId], map: "FKkifam22p4s1nm3bkmp1igcn5w")
+  @@index([tagId], map: "FKm6cfovkyqvu5rlm6ahdx3eavj")
+  @@map("post_tags")
+}
+
+model Post {
+  postId          BigInt          @id @default(autoincrement()) @map("post_id")
+  createdAt       DateTime        @map("created_at") @db.DateTime(6)
+  updatedAt       DateTime        @map("updated_at") @db.DateTime(6)
+  commitMessage   String?         @map("commit_message") @db.VarChar(255)
+  content         String          @db.Text
+  title           String          @db.VarChar(255)
+  repositoryId    BigInt          @map("repository_id")
+  userId          BigInt          @map("user_id")
+  comments        Comment[]
+  commitHistories CommitHistory[]
+  likes           Like[]
+  postImages      PostImage[]
+  postTags        PostTag[]
+  user            User            @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "FK5lidm6cqbc7u4xhqpxm898qme")
+  repository      Repository      @relation(fields: [repositoryId], references: [repositoryId], onUpdate: Restrict, map: "FKfwwqm5wbu71yvfamk29u8b87j")
+
+  @@index([userId], map: "FK5lidm6cqbc7u4xhqpxm898qme")
+  @@index([repositoryId], map: "FKfwwqm5wbu71yvfamk29u8b87j")
+  @@index([createdAt(sort: Desc)], map: "idx_post_created_at")
+  @@map("posts")
+}
+
+model ProfileImage {
+  profileImageId  BigInt   @id @default(autoincrement()) @map("profile_image_id")
+  createdAt       DateTime @map("created_at") @db.DateTime(6)
+  updatedAt       DateTime @map("updated_at") @db.DateTime(6)
+  profileImageUrl String   @map("profile_image_url") @db.VarChar(2048)
+  userId          BigInt   @map("user_id")
+  user            User     @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "FK6577qi31mxp06kavqxmt68fds")
+
+  @@index([userId], map: "FK6577qi31mxp06kavqxmt68fds")
+  @@map("profile_images")
+}
+
+// 프로젝트 소개(1차 범위 밖). 테이블이 DB에 있으므로 스키마에 남긴다.
+model Project {
+  projectId    BigInt   @id @default(autoincrement()) @map("project_id")
+  createdAt    DateTime @map("created_at") @db.DateTime(6)
+  updatedAt    DateTime @map("updated_at") @db.DateTime(6)
+  description  String   @db.TinyText
+  duration     String?  @db.VarChar(50)
+  title        String   @db.VarChar(255)
+  ownerId      BigInt   @map("owner_id")
+  thumbnailUrl String?  @map("thumbnail_url") @db.VarChar(255)
+  owner        User     @relation(fields: [ownerId], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "FKmueqy6cpcwpfl8gnnag4idjt9")
+
+  @@index([ownerId], map: "FKmueqy6cpcwpfl8gnnag4idjt9")
+  @@map("projects")
+}
+
+// 사용자가 글을 올리는 GitHub 저장소(사용자당 하나).
+model Repository {
+  repositoryId    BigInt          @id @default(autoincrement()) @map("repository_id")
+  createdAt       DateTime        @map("created_at") @db.DateTime(6)
+  updatedAt       DateTime        @map("updated_at") @db.DateTime(6)
+  githubUrl       String?         @map("github_url") @db.VarChar(255)
+  name            String          @db.VarChar(255)
+  userId          BigInt          @unique(map: "UKae58thkfptnlm6ctb25xxn6am") @map("user_id")
+  commitHistories CommitHistory[]
+  posts           Post[]
+  user            User            @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "FK52sbe60tcte61u3h80w181pqx")
+
+  @@map("repository")
+}
+
+model Tag {
+  tagId     BigInt    @id @default(autoincrement()) @map("tag_id")
+  createdAt DateTime  @map("created_at") @db.DateTime(6)
+  updatedAt DateTime  @map("updated_at") @db.DateTime(6)
+  tagName   String    @unique(map: "UK2c6s9hekidseaj5vbgb3pgy3k") @map("tag_name") @db.VarChar(100)
+  postTags  PostTag[]
+
+  @@map("tags")
+}
+
+// GitHub 토큰 테이블(github_tokens)은 복원하지 않았으므로 모델이 없다(m4-prisma-plan.md D5).
+model User {
+  userId        BigInt         @id @default(autoincrement()) @map("user_id")
+  createdAt     DateTime       @map("created_at") @db.DateTime(6)
+  updatedAt     DateTime       @map("updated_at") @db.DateTime(6)
+  email         String?        @unique(map: "UK6dotkott2kjsp8vw4d0m25fb7") @db.VarChar(100)
+  gamjaBatch    Int?           @map("gamja_batch")
+  githubId      String         @unique(map: "UKg9s8emobrgjmob2ty2va0l354") @map("github_id") @db.VarChar(100)
+  name          String         @db.VarChar(100)
+  nickname      String         @unique(map: "UK2ty1xmrrgtn89xt7kyxx6ta7h") @db.VarChar(255)
+  position      UserPosition?
+  role          UserRole
+  studentNumber String?        @map("student_number") @db.VarChar(255)
+  comments      Comment[]
+  introduction  Introduction?
+  likes         Like[]
+  posts         Post[]
+  profileImages ProfileImage[]
+  projects      Project[]
+  repository    Repository?
+
+  @@map("users")
+}
+
+// MySQL의 ENUM은 컬럼 정의 안에 값이 들어 있고 별도 타입 이름이 없다. 아래 이름은 코드에서만 쓰는 이름이다.
+enum AdmissionStatus {
+  FAIL
+  PASS
+}
+
+enum UserPosition {
+  APP_DEVELOPER
+  BACKEND
+  DESIGNER
+  FRONTEND
+}
+
+enum UserRole {
+  ADMIN
+  PENDING
+  PRE_REGISTER
+  USER
+}
