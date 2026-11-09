@@ -16,4 +16,13 @@ export class InMemoryUserRepository extends UserRepository {
     this.users.set(user.githubId, user);
     return Promise.resolve();
   }
+
+  // 공백만 있는 이메일도 비어 있는 것으로 본다(옛 StringUtils.hasText와 같다). 없는 사용자는 아무것도 하지 않는다.
+  updateEmailIfEmpty(githubId: string, email: string): Promise<void> {
+    const user = this.users.get(githubId);
+    if (user && !user.email?.trim()) {
+      this.users.set(githubId, { ...user, email });
+    }
+    return Promise.resolve();
+  }
 }

@@ -52,10 +52,20 @@ class FakeGithubClient extends GithubClient {
     return Promise.resolve(this.profile);
   }
 
-  fetchPrimaryEmail(): Promise<string> {
-    return Promise.reject(
-      new Error('이메일 보강은 M3-3이라 여기서는 부르지 않는다'),
-    );
+  // 로그인 뒤 이메일 보강용. primaryEmail이 null이면 "인증된 주 이메일이 없다"며 던지고,
+  // emailLookup이 'pending'이면 끝나지 않는다(응답이 보강을 기다리지 않는지 보려는 것이다).
+  primaryEmail: string | null = 'primary@example.com';
+  emailLookup: 'normal' | 'pending' = 'normal';
+
+  fetchPrimaryEmail(accessToken: string): Promise<string> {
+    this.calls.push(`email:${accessToken}`);
+    if (this.emailLookup === 'pending') return new Promise(() => {});
+    if (this.primaryEmail === null) {
+      return Promise.reject(
+        new Error('GitHub 주 이메일(인증됨)을 찾을 수 없습니다'),
+      );
+    }
+    return Promise.resolve(this.primaryEmail);
   }
 }
 
@@ -244,8 +254,10 @@ describe('GitHub 로그인', () => {
       ]);
     });
 
-    it('이름과 이메일을 비공개로 둔 사용자는 이름에 login을 쓰고 이메일은 null이다', async () => {
+    it('이름과 이메일을 비공개로 둔 사용자는 이름에 login을 쓰고 이메일은 null로 만든다', async () => {
       t.github.profile = { ...t.github.profile, name: null, email: null };
+      // 로그인 뒤 이메일 보강이 끝나기 전의 상태를 보려고 보강을 멈춰 둔다(보강은 아래 '로그인 뒤 이메일 보강'에서 시험한다).
+      t.github.emailLookup = 'pending';
 
       await t.login();
 
@@ -262,7 +274,7 @@ describe('GitHub 로그인', () => {
         role: 'USER' as const,
         name: '기존 이름',
         nickname: 'old-nick',
-        email: null,
+        email: 'old@example.com',
       };
       await t.users.create(existing);
 
@@ -352,6 +364,119 @@ describe('GitHub 로그인', () => {
 
       expect(res.status).toBe(302);
       expect(res.location).toBe(expected);
+    });
+  });
+
+  // 이메일을 비공개로 둔 사용자는 프로필의 email이 비어 있다. 로그인 응답을 보낸 뒤 따로 GitHub 주 이메일로 채운다(옛 GithubPostLoginHandler).
+  describe('로그인 뒤 이메일 보강', () => {
+    const emailOf = async () => (await t.users.findByGithubId('g_1001'))?.email;
+    const existingUser = (email: string | null) =>
+      t.users.create({
+        githubId: 'g_1001',
+        role: 'USER',
+        name: '기존 이름',
+        nickname: 'old-nick',
+        email,
+      });
+
+    it('프로필에 이메일이 없으면 로그인 뒤 GitHub 주 이메일로 채운다', async () => {
+      t.github.profile = { ...t.github.profile, email: null };
+
+      const res = await t.login();
+
+      expect(res.location).toBe('https://blog.gamza.xyz');
+      // 코드 교환 때 받은 GitHub 토큰으로 조회한다.
+      expect(t.github.calls).toContain(`email:${GITHUB_TOKEN}`);
+      await vi.waitFor(async () =>
+        expect(await emailOf()).toBe('primary@example.com'),
+      );
+    });
+
+    it('이미 이메일이 있으면 GitHub 주 이메일을 부르지 않는다', async () => {
+      await t.login(); // 프로필에 공개 이메일이 있는 새 사용자
+
+      expect(t.github.calls.some((c) => c.startsWith('email:'))).toBe(false);
+      expect(await emailOf()).toBe('octo@example.com');
+    });
+
+    // 로그인마다 비었는지 다시 본다(첫 로그인만이 아니다). 공백뿐인 이메일도 비어 있는 것이다.
+    it.each([null, '', '   '])(
+      '기존 사용자의 이메일이 비어 있으면(%j) 다음 로그인에서 채운다',
+      async (blank) => {
+        await existingUser(blank);
+
+        await t.login();
+
+        await vi.waitFor(async () =>
+          expect(await emailOf()).toBe('primary@example.com'),
+        );
+      },
+    );
+
+    it('기존 사용자의 이메일이 있으면 프로필 이메일이 비어 있어도 GitHub를 부르지 않고 바꾸지 않는다', async () => {
+      await existingUser('mine@example.com');
+      t.github.profile = { ...t.github.profile, email: null };
+
+      await t.login();
+
+      expect(t.github.calls.some((c) => c.startsWith('email:'))).toBe(false);
+      expect(await emailOf()).toBe('mine@example.com');
+    });
+
+    it('이메일 조회가 끝나지 않아도 로그인 응답은 기다리지 않는다', async () => {
+      t.github.profile = { ...t.github.profile, email: null };
+      t.github.emailLookup = 'pending';
+
+      const res = await t.login();
+
+      expect(res.status).toBe(302);
+      expect(res.location).toBe('https://blog.gamza.xyz');
+      expect(authCookies(res)).toHaveLength(2);
+      expect(await emailOf()).toBeNull();
+    });
+
+    it('인증된 주 이메일이 없어 조회가 실패해도 로그인은 성공하고 debug 로그만 남긴다', async () => {
+      const debug = vi
+        .spyOn(Logger.prototype, 'debug')
+        .mockImplementation(() => {});
+      t.github.profile = { ...t.github.profile, email: null };
+      t.github.primaryEmail = null;
+
+      const res = await t.login();
+
+      expect(res.location).toBe('https://blog.gamza.xyz');
+      expect(authCookies(res)).toHaveLength(2);
+      await vi.waitFor(() => expect(debug).toHaveBeenCalledOnce());
+      expect(String(debug.mock.calls[0][0])).toContain('g_1001');
+      expect(warn).not.toHaveBeenCalled();
+      expect(await emailOf()).toBeNull();
+    });
+
+    it('이메일 저장이 실패해도 로그인은 성공하고 경고에는 이메일 값을 싣지 않는다', async () => {
+      t.github.profile = { ...t.github.profile, email: null };
+      vi.spyOn(t.users, 'updateEmailIfEmpty').mockRejectedValueOnce(
+        new Error('db down'),
+      );
+
+      const res = await t.login();
+
+      expect(res.location).toBe('https://blog.gamza.xyz');
+      expect(authCookies(res)).toHaveLength(2);
+      await vi.waitFor(() => expect(warn).toHaveBeenCalledOnce());
+      const message = String(warn.mock.calls[0][0]);
+      expect(message).toContain('g_1001');
+      expect(message).toContain('db down');
+      expect(message).not.toContain('primary@example.com');
+      expect(message).not.toContain(GITHUB_TOKEN);
+    });
+
+    it('로그인이 실패하면 이메일 조회도 하지 않는다', async () => {
+      t.github.profile = { ...t.github.profile, email: null };
+      t.github.fail = 'profile';
+
+      await t.login();
+
+      expect(t.github.calls.some((c) => c.startsWith('email:'))).toBe(false);
     });
   });
 
