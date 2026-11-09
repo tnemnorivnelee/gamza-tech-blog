@@ -1,6 +1,8 @@
 import { Test } from '@nestjs/testing';
 import { Redis } from 'ioredis';
 import { AppModule } from './app.module.js';
+import { FetchGithubClient } from './modules/auth/fetch-github-client.js';
+import { GithubClient } from './modules/auth/github-client.js';
 import { JwtTokenService } from './modules/auth/jwt-token.service.js';
 import { RedisTokenStore } from './modules/auth/redis-token-store.js';
 import { TokenStore } from './modules/auth/token-store.js';
@@ -22,6 +24,8 @@ describe('AppModule', () => {
     );
     // 토큰 저장소는 Redis 구현이다(auth.module.ts).
     expect(moduleRef.get(TokenStore)).toBeInstanceOf(RedisTokenStore);
+    // GitHub 요청 클라이언트는 fetch 구현이다(auth.module.ts). 환경변수가 비어 있어도 만들어지고, 부를 때 막힌다.
+    expect(moduleRef.get(GithubClient)).toBeInstanceOf(FetchGithubClient);
     // 연결은 첫 명령을 보낼 때 열린다(lazyConnect). 그래서 이 시험은 Redis 없이도 끝나고, 앱을 닫으면 연결 객체도 끝난다.
     const redis = moduleRef.get(Redis);
     expect(redis.status).toBe('wait');
