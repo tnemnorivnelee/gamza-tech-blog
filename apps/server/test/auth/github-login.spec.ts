@@ -12,6 +12,7 @@ import {
 import { InMemoryTokenStore } from '../../src/modules/auth/in-memory-token-store.js';
 import { JwtTokenService } from '../../src/modules/auth/jwt-token.service.js';
 import { TokenStore } from '../../src/modules/auth/token-store.js';
+import { InMemoryUserRepository } from '../../src/modules/user/in-memory-user.repository.js';
 import { UserRepository } from '../../src/modules/user/user.repository.js';
 
 // 시험용 가짜 값. 비밀값은 파일에 적지 않고 계산한다.
@@ -108,11 +109,14 @@ async function createApp(env: Record<string, string> = {}) {
       AuthModule,
     ],
   })
-    // 사용자 저장소는 진짜 인메모리 구현을 쓴다. 토큰 저장소는 가짜라서 Redis가 필요 없다.
+    // 사용자 저장소와 토큰 저장소는 메모리 구현으로 바꾼다. 기본 사용자 저장소는 Prisma라서, 그대로 두면 이 시험이 개발용 DB에 사용자를 만든다.
+    // 토큰 저장소도 가짜라서 Redis가 필요 없다.
     .overrideProvider(GithubClient)
     .useValue(github)
     .overrideProvider(TokenStore)
     .useClass(InMemoryTokenStore)
+    .overrideProvider(UserRepository)
+    .useClass(InMemoryUserRepository)
     .compile();
   const app = moduleRef.createNestApplication();
   await app.listen(0);

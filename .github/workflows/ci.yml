@@ -23,10 +23,9 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-      # 마이그레이션 확인용 MySQL(비밀번호 없는 일회용). 이미지 번호는 로컬 Compose와 같게 둔다. 운영을 MySQL 8.4로 정했으므로(m4-prisma-plan.md D10)
-      # Compose를 8.4로 올릴 때 이 번호도 같이 올린다.
+      # 마이그레이션 확인과 사용자 저장소 시험용 MySQL(비밀번호 없는 일회용). 이미지 번호는 로컬 Compose와 같게 둔다(운영은 MySQL 8.4, m4-prisma-plan.md D10).
       mysql:
-        image: mysql:8.0.41
+        image: mysql:8.4.13
         env:
           MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
           MYSQL_DATABASE: gamza
@@ -55,5 +54,8 @@ jobs:
           DATABASE_URL: mysql://root@127.0.0.1:3306/gamza
       - run: yarn lint
       - run: yarn typecheck
+      # 사용자 저장소 시험이 위 MySQL(마이그레이션 적용된 gamza)에 붙는다. 못 붙으면 CI에서는 실패한다(건너뛰지 않는다).
       - run: yarn test
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/gamza
       - run: yarn build

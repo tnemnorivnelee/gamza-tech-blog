@@ -9,8 +9,8 @@ name: gamza-dev
 
 services:
   mysql:
-    # 기존 백업의 서버 버전과 같다.
-    image: mysql:8.0.41
+    # 운영 DB(RDS)를 MySQL 8.4로 정했으므로(docs/m4-prisma-plan.md D10) 같은 계열로 개발한다. 기존 백업(8.0.41)은 8.4에 그대로 복원된다.
+    image: mysql:8.4.13
     environment:
       # ${변수:?메시지}: 변수가 없거나 비어 있으면 컨테이너를 만들지 않고 이 메시지로 멈춘다(빈 비밀번호로 뜨는 것을 막는다).
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?apps/server/.env에 값을 채우세요}
