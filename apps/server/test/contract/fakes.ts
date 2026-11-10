@@ -17,6 +17,8 @@ import { AuthService } from '../../src/modules/auth/auth.service.js';
 import { CommentListResponse } from '../../src/modules/comment/dto/comment-list-response.dto.js';
 import { CommentRequest } from '../../src/modules/comment/dto/comment-request.dto.js';
 import { CommentResponse } from '../../src/modules/comment/dto/comment-response.dto.js';
+import { PostController } from '../../src/modules/post/post.controller.js';
+import { PostService } from '../../src/modules/post/post.service.js';
 
 const int64 = { type: 'integer', format: 'int64' } as const;
 
@@ -69,7 +71,7 @@ class FakeAdmissionController {
   }
 }
 
-// 인증 컨트롤러는 실제 클래스를 쓴다. 명세는 데코레이터만으로 만들어지므로 의존하는 부품은 빈 가짜로 채운다.
+// 인증·글 컨트롤러는 실제 클래스를 쓴다. 명세는 데코레이터만으로 만들어지므로 의존하는 부품은 빈 가짜로 채운다.
 // AuthModule을 통째로 넣으면 전역 가드가 따라와서 위 가짜 컨트롤러의 응답 시험이 로그인을 요구하게 된다.
 export async function createFakeApp() {
   const moduleRef = await Test.createTestingModule({
@@ -77,9 +79,11 @@ export async function createFakeApp() {
       FakeCommentController,
       FakeAdmissionController,
       AuthController,
+      PostController,
     ],
     providers: [
       { provide: AuthService, useValue: {} },
+      { provide: PostService, useValue: {} },
       { provide: ConfigService, useValue: {} },
     ],
   }).compile();

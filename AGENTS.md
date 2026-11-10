@@ -50,6 +50,8 @@ apps/server/src/
   common/            dto/ (ResponseDto, PagedResponse, Pageable, ErrorResponse),
                      error/ (ErrorCode, BusinessException, global exception filter),
                      swagger/ (setup, @Ok* decorators)
+                     pageable.ts, local-date-time.ts, spring-compat.ts (request parsing and date
+                     formatting that reproduce the old Spring/Jackson behavior)
   modules/<domain>/  one Nest module per old domain; controller -> service -> repository; dto/
   infra/             prisma/ and redis/ (connection only; queries, key names and commands live with the caller, e.g. modules/user, modules/auth);
                      (planned) storage, gemini, github
