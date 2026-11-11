@@ -1,6 +1,6 @@
 # M5 읽기 API 계획
 
-작성일 2026-11-10 · 상태: M5-1 구현됨(13절), M5-2~M5-6 대기 · 이슈 #46 · 관련: `backend-plan.md` 5·7·11절, `m4-prisma-plan.md`, `improvement-candidates.md` 22~27번, `porting-principle.md`
+작성일 2026-11-10 · 상태: M5-1(13절)·M5-2(14절) 구현됨, M5-3~M5-6 대기 · 이슈 #46, #48 · 관련: `backend-plan.md` 5·7·11절, `m4-prisma-plan.md`, `improvement-candidates.md` 22~27번, `porting-principle.md`
 
 확인 기준: 옛 백엔드 `potato-club/GamzaTechBlog-back`의 `master`와 프론트 `potato-club/GamzaTechBlog-front`는 읽기만 했다(코드를 실행하지 않았다). 복원한 로컬 DB는 합계만 조회했다(개인정보 행은 보지 않았다). Spring 동작은 공식 문서와 Spring Data 소스로 확인했다. 표시: **[확인함]** 코드·문서에서 직접 확인, **[추정]** 자료로 짐작함, **[미검증]** 아직 확인할 방법이 없음. 운영 중이던 서버의 실제 응답은 못 봤으므로 "옛 동작"은 `master` 코드 기준이다.
 
@@ -31,6 +31,7 @@ M5는 프론트가 쓰는 **읽기 API 17개**를 복원한 DB 위에서 옛 서
 - **정렬**: 글 목록 계열과 좋아요 목록은 요청의 `sort`를 **무시하고** 항상 `createdAt` 내림차순으로 고정되어 있다. 소개 목록(`findAll(pageable)`)은 요청의 `sort`를 반영한다(기본 `createdAt` 내림차순). 내 댓글 목록은 메서드 이름의 `createdAt` 내림차순에 요청의 `sort`가 덧붙는다 **[추정: Spring Data의 일반 동작]**. 소개·댓글에서 없는 속성으로 정렬하면 처리되지 않은 예외라서 500 `C004`가 된다 **[추정]**.
 - **날짜**: `LocalDateTime` 필드는 Jackson 기본 직렬화로 `2025-07-27T21:08:37.109696`처럼 나간다(시간대 표시 없음, 소수점 이하는 0이 아닌 자리까지, 0이면 생략) **[추정: 설정 파일에 Jackson 설정이 없다]**. 예외로 `UserProfileResponse`의 `createdAt`·`updatedAt`은 문자열이고 형식이 `yyyy-MM-dd'T'HH:mm:ss`(초까지)다. 프론트의 생성 클라이언트는 날짜 필드를 `Date`로 받으므로 소수점 아래 자릿수는 화면에 영향이 없다 **[추정]**.
 - **없는 대상**: 글이 없으면 404 `P001`(`POST_NOT_FOUND`), 사용자가 없으면 404 `U001`(`USER_NOT_FOUND`). 둘 다 우리 `ErrorCode`에 이미 있다.
+- **경로의 `Long`**(`@PathVariable Long postId`) **[확인함: Spring 소스]**: Spring의 숫자 변환(`StringToNumberConverterFactory` → `NumberUtils.parseNumber`)을 거친다. 값 안의 공백을 **모두** 지우고(Java `Character.isWhitespace` 기준), `0x`·`0X`·`#`로 시작하면(앞에 `-`는 가능, `+`는 불가) 16진수로 `Long.decode`, 아니면 `Long.valueOf`(부호 `+`·`-` 가능)로 읽는다. 숫자가 아니거나 int64 범위를 넘으면 400 `C005`(`INVALID_TYPE_VALUE`)다(개선 후보 30번). 숫자 형식이면 없는 글은 404 `P001`이다.
 - **검색어 오류**: 옛 예외 처리기는 `MethodArgumentNotValidException`(400)과 타입 불일치(400) 등만 따로 다루고 나머지는 500 `C004`로 보낸다. `keyword`가 비었거나(`@NotBlank` 위반) 없으면(필수 파라미터 누락) 둘 다 이 경로라서 **500 `C004`**가 된다 **[확인함: 코드, 운영 응답은 미관찰]**.
 - **`tags` 파라미터**: `List<String>`이라 `tags=a&tags=b`와 `tags=a,b` 둘 다 목록이 된다(Spring의 쉼표 분리). 여러 태그는 **하나라도 가진 글**(OR)이다.
 - **프론트의 호출 방식**: 검색은 생성 클라이언트가 `pageable[page]=0`처럼 중첩해서 보내서 Spring이 못 읽으므로, 프론트가 `keyword`, `page`, `size`, `sort`를 평평한 쿼리로 직접 만들어 호출한다(`postService.server.ts`). 우리도 평평한 쿼리를 받아야 한다. 명세(OpenAPI) 쪽은 `pageable` 객체 하나로 문서화되어 있어서 그대로 둔다.
@@ -60,16 +61,21 @@ M5는 프론트가 쓰는 **읽기 API 17개**를 복원한 DB 위에서 옛 서
 
 - 글이 없으면 404 `P001`. 메시지 "게시물 상세 조회 성공".
 - `PostDetailResponse`: `postId, title, content, writer(닉네임), writerProfileImageUrl, likesCount(=좋아요 행 수), githubId(작성자), createdAt, updatedAt, tags, comments`.
-- `comments`: 그 글의 **최상위 댓글만** `createdAt` 내림차순으로 가져오고, 각 댓글 안에 `replies`가 재귀로 들어간다(`CommentResponse{commentId, writer, writerProfileImageUrl, content, createdAt, replies}`). 답글의 정렬은 지정이 없다 **[추정: 기본 키 순서]**. 현재 데이터에는 답글이 0개다.
+- `comments`: 그 글의 **최상위 댓글만** `createdAt` 내림차순으로 가져오고, 각 댓글 안에 `replies`가 재귀로 들어간다(`CommentResponse{commentId, writer, writerProfileImageUrl, content, createdAt, replies}`). 답글의 정렬은 지정이 없다 **[추정: 기본 키 순서]**(개선 후보 31번). 현재 데이터에는 답글이 0개다.
+- **값이 없을 때** **[확인함: 코드]**: `PostDetailResponse`와 `CommentResponse`는 `NON_NULL`이 아니라서 작성자의 프로필 이미지가 없으면 `writerProfileImageUrl`이 키째 빠지지 않고 `null`이다. 댓글이 없으면 `comments: []`, 답글이 없으면 `replies: []`다.
+- `likesCount`는 `post.getLikes().size()`(그 글의 좋아요 행 수), `tags`는 글에 연결된 태그 이름(정렬 지정 없음, 연결한 순서로 짐작), `createdAt`·`updatedAt`은 3.1의 날짜 모양이다. 본문(`content`)은 이미지 표기를 지우지 않고 그대로 준다(요약은 목록에서만).
+- 답글은 깊이에 제한이 없는 재귀다(`mapToCommentTree`). 새 코드는 글의 댓글을 한 번에 평평하게 읽어 트리로 만든다(`comment-tree.ts`).
 
 ### 3.4 인기 글: `getWeeklyPopularPosts`
 
-- 작성 시각이 `지금 - 1주`보다 늦은 글 중에서 **좋아요 수 내림차순, 같으면 작성 시각 내림차순으로 최대 3개**. `PostPopularResponse{postId, title, writer, writerProfileImageUrl}`. 메시지 "주간 인기 게시물 조회 성공".
+- 작성 시각이 `지금 - 1주`보다 늦은 글(`after`, 같은 시각은 뺀다) 중에서 **좋아요 수 내림차순, 같으면 작성 시각 내림차순으로 최대 3개**. 좋아요가 0개인 글도 후보다(왼쪽 조인). `PostPopularResponse{postId, title, writer, writerProfileImageUrl}`(프로필 이미지가 없으면 `null`). 메시지 "주간 인기 게시물 조회 성공".
+- `지금`은 `LocalDateTime.now()`라서 서버의 벽시계 시각이다. DB에는 서울 벽시계 값이 들어 있으므로 새 코드는 같은 기준(`Date.now() + 9시간`)으로 `지금 - 7일`을 만든다(`m4-prisma-plan.md` D7). 좋아요 수도 작성 시각도 같으면 순서가 정해져 있지 않았다. 새 쿼리는 `postId` 내림차순으로 마무리한다.
 - 현재 복원 데이터는 마지막 글이 2026-05-16이라 최근 7일 글이 0개다. 지금 호출하면 빈 목록이다. 시험에서는 시각을 고정해서 검증한다.
 
 ### 3.5 홈 피드: `getHomeFeed`
 
-- `HomeFeedResponse{weeklyPopular, latest, allTags}`. `weeklyPopular`는 3.4, `latest`는 `getPosts`(같은 `page`, `size`, `tags`), `allTags`는 3.6과 같다. 메시지 "홈 피드 조회 성공".
+- `HomeFeedResponse{weeklyPopular, latest, allTags}`. `weeklyPopular`는 3.4, `latest`는 `getPosts`(같은 `page`, `size`, `tags`, 기본 크기 10), `allTags`는 3.6과 같다. 메시지 "홈 피드 조회 성공". 경로는 `GET /api/v1/posts/feed`다.
+- **캐시와 자기 호출** **[확인함: 코드]**: 옛 `getHomeFeed`는 같은 클래스의 `getWeeklyPopularPosts()`와 `getPosts()`를 `this`로 부른다. Spring의 캐시는 프록시를 거쳐야 걸리므로 이 두 호출에는 캐시가 걸리지 않았고, 다른 빈인 `TagService.getAllTags()`와 `homeFeed` 결과 자체만 캐시됐다. M5-5에서 캐시를 붙일 때 이 점을 맞춘다.
 
 ### 3.6 태그: `getAllTags`
 
@@ -137,7 +143,7 @@ apps/server/src/
 각각 이슈 → 브랜치 → PR이고, 모두 `lint`·`typecheck`·`test`·`build`를 통과해야 한다.
 
 1. **M5-1 공통 부품과 글 목록 4개**: `pageable.ts`, `local-date-time.ts`, 스니펫, `PostListResponse` 등 DTO를 실제 모듈로, `PostRepository`의 `fetchPosts`. 작업: `getPosts`, `getPostsByTag`, `searchPosts`, `getMyPosts`. 시험: 페이지 해석 규칙, 날짜 문자열, 스니펫, 태그 OR 필터, 대소문자와 `%`·`_` 검색, 정렬 고정, 총 개수, 접근 규칙, 계약.
-2. **M5-2 글 상세·인기·홈 피드·태그**: `getPostDetail`(댓글 트리 포함), `getWeeklyPopularPosts`(시각을 주입해 시험), `getHomeFeed`, `getAllTags`.
+2. **M5-2 글 상세·인기·홈 피드·태그**: `getPostDetail`(댓글 트리 포함), `getWeeklyPopularPosts`(시각을 고정해 시험), `getHomeFeed`, `getAllTags`. **구현함(14절).**
 3. **M5-3 사용자와 소개**: `getCurrentUserProfile`, `getCurrentUserRole`, `getActivitySummary`, `getPublicProfileByNickname`, `getPendingUsers`, `getIntroList`.
 4. **M5-4 내 댓글·좋아요**: `getMyComments`, `getMyLikes`(`tags: [null]` 포함), `isPostLiked`.
 5. **M5-5 읽기 캐시**: Redis `cache:<이름>:<키>`, 만료 5·30·60분, 빈 결과는 저장 안 함(3.10). 무효화 연결은 M6.
@@ -154,7 +160,7 @@ apps/server/src/
 ## 8. 미검증
 
 1. ~~Prisma `contains`가 `%`·`_`를 글자 그대로 취급하는지~~ M5-1에서 확인함(13절): 취급하지 않는다. 키워드 앞에 `\`를 붙여서 해결했다.
-2. `postTags`와 `replies`의 정렬(옛은 지정이 없고 기본 키 순서로 짐작한다). 같은 데이터로 목록을 만들어 보고 정한다.
+2. `postTags`와 `replies`의 정렬(옛은 지정이 없고 기본 키 순서로 짐작한다). 글 목록·상세의 태그는 `postTagId`, 답글은 `commentId` 오름차순으로 구현했다(M5-1·M5-2). 옛 서버의 실제 응답을 못 봐서 **[추정]**이 남는다(현재 데이터에는 답글이 0개, 태그 순서는 연결한 순서와 같을 것으로 본다).
 3. 옛 응답의 날짜가 실제로 마이크로초까지 나갔는지. 운영 응답을 못 봐서 확인할 수 없고, 프론트가 `Date`로 파싱하므로 영향이 없다고 본다.
 4. 옛 운영에서 캐시가 실제로 동작했는지(설정상 Redis는 연결되어 있다). 운영 응답이 낡았는지는 못 봤다.
 5. `sort` 문법(`property,dir`)에서 틀린 값을 만났을 때 Spring이 하는 일의 세부(소개·내 댓글에만 영향). 흔한 값(`createdAt,desc`)만 맞추고, 그 밖은 500 `C004`로 둔다.
@@ -229,3 +235,28 @@ UPDATE posts          SET content           = REPLACE(content, @old, @new)      
 **알려진 차이**: 날짜의 소수점 아래 넷째 자리부터가 잘린다(D3). `tags`나 검색어에 문자열이 아닌 값이 오면(`tags[a]=b`) Spring처럼 없는 것으로 본다. 숫자는 ASCII만 받는다(Java는 다른 문자 체계의 숫자도 받는다. `spring-compat.ts`의 `shortcut:` 주석).
 
 **남은 것**: M5-2(글 상세, 인기, 홈 피드, 태그). 진짜 MySQL 시험의 연결 확인(`canConnect`)이 두 파일에 중복되어 있다. 세 번째 파일이 생기면 공용으로 뽑는다.
+
+## 14. M5-2 구현 결과 [확인함]
+
+**만든 것**: `modules/post/`에 라우트 3개(`GET /api/v1/posts/popular`, `/feed`, `/:postId`: 이름이 정해진 경로를 `/:postId`보다 앞에 둔다), `PostService`의 `getPostDetail`·`getWeeklyPopularPosts`·`getHomeFeed`, `PostRepository`의 `findPostDetail`·`findWeeklyPopularPosts`, DTO 3개(`PostDetailResponse`, `PostPopularResponse`, `HomeFeedResponse`). `modules/comment/comment-tree.ts`는 평평한 댓글 목록을 트리로 바꾸는 순수 함수다. `modules/tag/`는 `GET /api/v1/tags`(`getAllTags`)이고 `TagModule`이 `TagService`를 내보내서 `PostModule`의 홈 피드가 쓴다. `common/spring-compat.ts`에 `parseSpringLong`(경로의 `Long` 변환, bigint), `common/swagger/api-decorators.ts`에 `pagedSchema`(홈 피드의 `latest`가 `@OkPagedOf`와 같은 이름 붙은 스키마가 되게 한다)를 더했다. 계약 시험은 `TRIAL.operations`에 4개를 더했고, "없는 작업" 시험은 아직 안 옮긴 `getIntroList`로 바꿨다. 진짜 DB 시험의 접속 코드는 파일이 셋이 되어 `test/support/test-database.ts`로 뽑았다.
+
+**확인한 방법과 결과**
+
+1. 게이트 4개: `lint`, `typecheck`, `test`(29개 파일 604개, 이전 27개 512개), `build` 통과.
+2. 진짜 MySQL 8.4.13으로 하는 저장소 시험: 글 저장소 34개(M5-1의 25개 + 9개), 태그 저장소 3개. 상세는 좋아요 수(그 글의 것만), 태그의 연결한 순서, 댓글 전부(최상위와 답글)의 작성 시각 내림차순과 같은 시각의 `commentId` 마무리, 프로필 이미지 `null`, 없는 글 `null`. 인기 글은 기준 시각과 같은 글 제외(`gt`), 좋아요 많은 순 → 최신순 → `postId` 큰 순, 좋아요 0개도 후보, `limit`. 태그는 `a`, `B`, `c` 순서(DB 정렬 규칙: JS의 기본 정렬은 `B`, `a`, `c`라서 다르다), 글에 연결 안 된 태그 포함, 한글 가나다순.
+3. 순수 함수와 서비스 시험: `parseSpringLong`(십진수·16진수·부호·공백 제거·Java 공백과 JS 공백의 차이·int64 경계·`2^53+1`), 댓글 트리(깊이 3, 답글 `commentId` 오름차순, 각자의 부모에게만 붙음), 서비스의 응답 변환·404·홈 피드 묶음·인기 글 기준 시각(시스템 시각을 고정하고 코드의 `+9시간` 상수를 쓰지 않은 `Intl`(`Asia/Seoul`)의 서울 시각과 비교).
+4. 컨트롤러 시험(서비스·저장소는 가짜): 세 라우트와 `/tags`의 공개 여부·메시지, `popular`와 `feed`가 `/:postId`로 흘러가지 않음, 글 번호 해석(`0x10`, 공백, int64 최댓값), 숫자 아님·범위 초과의 400 `C005`(`errors`의 `postId`, 원래 값, `typeMismatch`), 서비스가 던진 404 `P001`의 전달, `null` 이미지 주소가 키째 나감, 홈 피드의 `page`·`size`·`tags`·기본 크기 10.
+5. 생성된 명세를 직접 열어 확인했다: `HomeFeedResponse.latest`는 `$ref`가 아니라 `title: PagedResponsePostListResponse`인 `allOf`이고, `getPostDetail`의 `postId`는 `int64`, `getAllTags`의 응답은 `ResponseDtoListString`이다. 계약 시험이 4개 작업과 DTO를 프론트 계약과 비교해 통과한다.
+6. 변이 시험 59개(경로 해석·댓글 트리·정렬과 필터·개수·기준 시각·메시지·공개 여부·모듈 등록·명세 모양)를 돌려 57개를 시험이 잡았다. 원본은 해시로 복원을 확인했다. 살아남은 2개는 동작이 같은 변이다: 최상위 댓글을 `repliesOf`의 `null` 키 아래에 묶는 변경(아무도 그 키를 읽지 않고 이 줄은 타입 좁히기용이다), `AppModule`에서 `TagModule`을 빼는 변경(`PostModule`이 `TagModule`을 가져오므로 `/api/v1/tags`는 그대로 열린다. 라우트를 가진 모듈이라 `AppModule`에 명시해 둔다). 이 판정을 하다가 컨트롤러가 앱에 실제로 등록됐는지 보는 시험이 없다는 것을 알았다(다른 시험은 컨트롤러를 직접 넣는다. M5-1부터 있던 구멍). `app.module.spec.ts`에 `PostController`·`TagController`가 조립된 앱에서 꺼내진다는 단언을 더했고, `AppModule`에서 `PostModule`을 빼는 변이가 이제 잡힌다.
+7. 시험이 개발 DB에 남긴 것이 없다: 시험 전후 합계가 같다(users 15, posts 58, tags 45, post_tags 76, post_images 129, comments 35, likes 83). 시험 접두사(`post_test_`, `g_test_`, `test-tag-`, `tag-spec-`)의 행과 2099년 글은 0개다.
+
+**알게 된 함정**
+
+1. **DB 시험 파일을 병렬로 돌리면 MySQL 교착이 난다.** 전체 실행에서 `createUser`의 `prisma.repository.create()`가 `Transaction failed due to a write conflict or a deadlock`으로 가끔 죽었다(7번 중 2번, 다시 30번 중 1번). DB 시험 파일 둘(두 조합, 각 20번)이나 셋(30번)만 병렬로 돌릴 때는 모두 통과해서 전체 실행에서만 보인다. 접두사를 나눠도 막을 수 없다: `prisma-user.repository.spec.ts`의 `afterEach`는 `g_test_` 접두사 사용자를 지우는 범위 삭제인데, 사용자를 지울 때 MySQL이 자식 테이블의 외래 키 검사로 잠금(간격 잠금)을 잡고, 같은 시각에 다른 파일이 `repository`에 행을 넣으면 엇갈리는 것으로 **짐작한다**(교착 기록 `SHOW ENGINE INNODB STATUS`는 `PROCESS` 권한이 없어 못 봤다 **[추정]**). 해결은 재시도가 아니라 DB 시험 파일(`*.repository.spec.ts`)을 한 번에 하나씩 돌리는 것이다: `vitest.config.ts`에 `unit`(나머지, 병렬)과 `db`(`fileParallelism: false`) 두 프로젝트를 둔다. 파일 시작·끝 시각으로 DB 파일끼리 겹치지 않음을 확인했고, 전체 `yarn test`를 60번 돌려 0번 실패했다. 이전에는 같은 방식에서 7번 중 2번, 30번 중 1번 실패했다(실패 확률이 낮아서 증명은 아니고, 60번 무실패는 개선의 근거다).
+2. **`@PathVariable Long`은 `Long.parseLong`이 아니다.** Spring 소스(`NumberUtils.parseNumber`)를 보니 모든 공백을 지우고 16진수(`0x10`, `#10`, `-0x10`)를 받는다. 그대로 옮겼고(`parseSpringLong`, 개선 후보 30번), 2^53을 넘는 번호가 있어서 `Number` 대신 `bigint`로 읽어 Prisma에도 `bigint`로 넘긴다.
+3. **`@ApiPropertyOptional`에는 `SchemaObject`를 통째로 못 넘긴다**(타입이 맞지 않는다). 홈 피드 `latest`는 `pagedSchema`에서 `title`과 `allOf`만 꺼내 `type: Object`와 함께 넘긴다. 명세에는 `type` 없이 `title`과 `allOf`만 나가서 `@OkPagedOf`가 만드는 것과 같은 모양이다.
+4. **태그 정렬은 JS가 아니라 DB의 정렬 규칙이다**(`utf8mb4_0900_ai_ci`, 대소문자 구분 없음). 시험이 `[...names].sort()`와 다름을 일부러 확인한다. 전체 태그 목록에는 복원한 실제 태그 45개가 섞여 있어서, 시험은 자기가 만든 태그만 걸러 순서를 본다. 접두사는 글 저장소 시험의 `test-tag-`와 겹치지 않는 `tag-spec-`다.
+
+**알려진 차이**: 날짜의 소수점 아래 넷째 자리부터가 잘린다(D3). 답글과 태그의 순서는 옛 서버가 정하지 않아 기본 키 순서로 짐작했다(8절 2번). 숫자는 ASCII만 받는다(`spring-compat.ts`의 `shortcut:` 주석). 홈 피드의 세 조회는 옛 코드가 차례로 불렀지만 새 코드는 동시에 보낸다(결과는 같다). 인기 글은 현재 데이터(마지막 글 2026-05-16)에서 빈 목록이다.
+
+**남은 것**: M5-3(사용자와 소개). 홈 피드의 안쪽 호출에 캐시가 걸리지 않았던 점(3.5)은 M5-5에서 맞춘다.
