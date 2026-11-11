@@ -1,6 +1,6 @@
 # M4 Prisma 계획
 
-작성일 2026-11-09 · 상태: M4-1·M4-2 구현됨(10·11절), M4-3 남음 · 이슈 #39, #41, #44 · 관련: `backend-plan.md` 7절·11절, `improvement-candidates.md` 19~21번, `porting-principle.md`
+작성일 2026-11-09 · 상태: M4-1·M4-2 구현됨(10·11절), M4-3은 로그인 확인만 남음 · 이슈 #39, #41, #44 · 관련: `backend-plan.md` 7절·11절, `improvement-candidates.md` 19~21번, `porting-principle.md`
 
 확인 기준: 복원한 로컬 DB를 직접 조회했고(개인정보 행은 보지 않고 합계만 봤다), 옛 백엔드 `potato-club/GamzaTechBlog-back`의 `master`는 읽기만 했다(코드를 실행하지 않았다). Prisma는 npm과 공식 문서로 확인했다. 표시: **[확인함]** 직접 확인, **[추정]** 자료로 짐작함, **[미검증]** 아직 확인할 방법이 없음.
 
@@ -149,7 +149,9 @@ apps/server/
 3. **`DATABASE_URL`이 `undefined`이면 어댑터 생성자가 `TypeError`로 죽는다.** 빈 문자열을 넘기면 서버는 뜨고 첫 쿼리에서 "error parsing connection string"으로 막힌다. 개발에서 비워 둘 수 있다는 D2와 맞추려고 빈 문자열을 넘긴다.
 4. **시험이 `users`의 AUTO_INCREMENT를 올린다.** InnoDB는 지운 행의 번호를 되돌리지 않는다. 회원 데이터에는 영향이 없고 새 사용자의 id가 46보다 커질 뿐이다. 값을 정확히 보려면 `SET SESSION information_schema_stats_expiry=0`을 먼저 줘야 한다(통계를 하루 캐시한다).
 
-**남은 것**: M4-3. 코드에 남긴 `shortcut:` 주석 확인과 사용자가 실제 GitHub 로그인으로 기존 계정의 role이 유지되는지 확인하는 것. 서버를 띄워 로그인해 보는 것은 아직 하지 않았다.
+**M4-3 점검 결과 (2026-11-10)**: 코드의 `shortcut:` 주석은 6개이고 M4에서 풀 것은 없다. 1) `prisma.service.ts` 연결 풀이 어댑터 기본값 → 운영 DB(RDS)를 만들 때. 2) `redis.module.ts` 종료 때 진행 중 명령을 기다리지 않음 → 무중단 배포를 다룰 때. 3) `auth.module.ts` 로그인 `state`를 서버 메모리 세션에 둠 → 서버 재시작·여러 대로 늘릴 때(개선 후보 17번). 4) `in-memory-user.repository.ts` 시험용인데 `src/`에 있음 → `test/`로 옮기는 정리(파일 이동이라 요청이 있을 때). 5) `user.repository.ts`의 `User`가 필드 3개 → M5~M6. 6) 같은 파일의 `NewUser`와 `User` 분리 → M5.
+
+**남은 것**: 사용자가 서버를 띄워 실제 GitHub로 로그인해서 기존 계정의 role이 유지되는지 확인하는 것(아직 하지 않았다).
 
 ## 12. 문서 정정
 

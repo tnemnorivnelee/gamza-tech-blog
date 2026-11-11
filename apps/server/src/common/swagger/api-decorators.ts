@@ -75,8 +75,9 @@ export const OkBoolean = () =>
 /** data 없음. 옛 명세의 ResponseDtoVoid는 data를 object로 적었다. */
 export const OkVoid = () => okResponse('ResponseDtoVoid', { type: 'object' });
 
-// 옛 `@ParameterObject Pageable`이 펼치던 쿼리 파라미터 세 개.
-export const ApiPageable = () =>
+// 옛 `@ParameterObject Pageable`이 펼치던 쿼리 파라미터 세 개. defaultSize는 문서에 적는 기본 크기다
+// (@PageableDefault가 있는 목록은 10, 없으면 Spring 기본값 20). 실제 기본값은 컨트롤러가 parsePageable에 넘기는 값이다.
+export const ApiPageable = (defaultSize = 20) =>
   applyDecorators(
     ApiQuery({
       name: 'page',
@@ -86,7 +87,12 @@ export const ApiPageable = () =>
     ApiQuery({
       name: 'size',
       required: false,
-      schema: { type: 'integer', format: 'int32', minimum: 1, default: 20 },
+      schema: {
+        type: 'integer',
+        format: 'int32',
+        minimum: 1,
+        default: defaultSize,
+      },
     }),
     ApiQuery({
       name: 'sort',
