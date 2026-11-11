@@ -55,7 +55,7 @@ apps/server/src/
   modules/<domain>/  one Nest module per old domain; controller -> service -> repository; dto/
   infra/             prisma/ and redis/ (connection only; queries, key names and commands live with the caller, e.g. modules/user, modules/auth);
                      (planned) storage, gemini, github
-apps/server/test/    tests that start an HTTP app (contract/, error/)
+apps/server/test/    tests that start an HTTP app (contract/, error/); support/ is the shared setup of the real-MySQL specs
 apps/server/contract/front-contract.json
                      snapshot of the frontend's generated client; regenerate with
                      apps/server/scripts/extract-contract.mjs <frontend>/src/generated/api
@@ -96,7 +96,7 @@ Before opening a PR, `lint`, `typecheck`, `test`, and `build` must all pass. CI 
 - New logic with branches, parsing, or security impact needs a test. Pin ported behavior with tests (for example: `data` is omitted when null but kept for `0`, `false`, and `''`).
 - Keep the contract comparison test (`test/contract`) passing and widen its scope as controllers are ported. It compares structure, not only names. Never weaken it to make a change pass.
 - `yarn typecheck` covers `test/` because neither vitest nor `nest build` type-checks it.
-- The default `UserRepository` is the Prisma one. A test that starts an app must replace it with `InMemoryUserRepository` (`overrideProvider`). Only `*.repository.spec.ts` files talk to a real MySQL, and they create rows with a test-only prefix and delete them afterwards. The development database holds restored member data.
+- The default `UserRepository` is the Prisma one. A test that starts an app must replace it with `InMemoryUserRepository` (`overrideProvider`). Only `*.repository.spec.ts` files talk to a real MySQL, and they create rows with a test-only prefix and delete them afterwards. The development database holds restored member data. These files run one at a time (the `db` project in `vitest.config.ts`) because concurrent writers deadlock in MySQL; their shared connection setup is `test/support/test-database.ts`.
 
 ## Git workflow (required)
 

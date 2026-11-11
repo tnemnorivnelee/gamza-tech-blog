@@ -52,19 +52,22 @@ export const OkListOf = (model: Type | StringConstructor) =>
         [model as Type],
       );
 
+// 페이지 단위 목록의 스키마(PagedResponse 공통 부분 + content 항목 타입). title은 생성기가 모델 이름으로 쓴다.
+// @OkPagedOf와, 응답 안에 페이지가 한 필드로 들어가는 곳(홈 피드의 latest)이 같이 쓴다.
+export const pagedSchema = (model: Type): SchemaObject => ({
+  title: `PagedResponse${model.name}`,
+  allOf: [
+    ref(PagedResponse),
+    { properties: { content: { type: 'array', items: ref(model) } } },
+  ],
+});
+
 /** data: 페이지 단위 목록(PagedResponse) */
 export const OkPagedOf = (model: Type) =>
-  okResponse(
-    `ResponseDtoPagedResponse${model.name}`,
-    {
-      title: `PagedResponse${model.name}`,
-      allOf: [
-        ref(PagedResponse),
-        { properties: { content: { type: 'array', items: ref(model) } } },
-      ],
-    },
-    [PagedResponse, model],
-  );
+  okResponse(`ResponseDtoPagedResponse${model.name}`, pagedSchema(model), [
+    PagedResponse,
+    model,
+  ]);
 
 export const OkString = () =>
   okResponse('ResponseDtoString', { type: 'string' });

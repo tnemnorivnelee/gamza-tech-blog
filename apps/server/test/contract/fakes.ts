@@ -19,6 +19,8 @@ import { CommentRequest } from '../../src/modules/comment/dto/comment-request.dt
 import { CommentResponse } from '../../src/modules/comment/dto/comment-response.dto.js';
 import { PostController } from '../../src/modules/post/post.controller.js';
 import { PostService } from '../../src/modules/post/post.service.js';
+import { TagController } from '../../src/modules/tag/tag.controller.js';
+import { TagService } from '../../src/modules/tag/tag.service.js';
 
 const int64 = { type: 'integer', format: 'int64' } as const;
 
@@ -80,10 +82,12 @@ export async function createFakeApp() {
       FakeAdmissionController,
       AuthController,
       PostController,
+      TagController,
     ],
     providers: [
       { provide: AuthService, useValue: {} },
       { provide: PostService, useValue: {} },
+      { provide: TagService, useValue: {} },
       { provide: ConfigService, useValue: {} },
     ],
   }).compile();

@@ -1,11 +1,13 @@
 import { loadEnv } from 'vite';
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
+
+// 진짜 MySQL에 쓰는 시험(AGENTS.md: *.repository.spec.ts)이다.
+const DB_SPECS = '**/*.repository.spec.ts';
 
 export default defineConfig(({ mode }) => ({
   test: {
     globals: true,
     root: './',
-    include: ['**/*.spec.ts'],
     env: {
       // 테스트용 가짜 JWT 키. 값을 파일에 적지 않고 실행할 때 계산한다(비밀값 스캐너가 오탐하지 않게).
       JWT_SECRET: Buffer.alloc(32, 'test-only').toString('base64'),
@@ -16,5 +18,22 @@ export default defineConfig(({ mode }) => ({
       // (CI는 일회용 DB라서 환경변수로 준다.)
       ...loadEnv(mode, process.cwd(), 'REDIS_'),
     },
+    // DB 시험 파일은 한 번에 하나씩 돌린다. 여러 파일이 같은 DB에 동시에 쓰면 MySQL이 외래 키 검사의 잠금을 엇갈려 잡아
+    // 교착(deadlock)으로 시험 하나를 죽인다(전체 실행 30번 중 1번꼴로 repository.create에서 났다). 접두사를 나눠도 막을 수 없다.
+    // 나머지 시험은 그대로 병렬이고, 두 묶음도 서로 기다리지 않는다.
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          include: ['**/*.spec.ts'],
+          exclude: [...configDefaults.exclude, DB_SPECS],
+        },
+      },
+      {
+        extends: true,
+        test: { name: 'db', include: [DB_SPECS], fileParallelism: false },
+      },
+    ],
   },
 }));
