@@ -23,7 +23,7 @@ import { HomeFeedResponse } from './dto/home-feed-response.dto.js';
 import { PostDetailResponse } from './dto/post-detail-response.dto.js';
 import { PostListResponse } from './dto/post-list-response.dto.js';
 import { PostPopularResponse } from './dto/post-popular-response.dto.js';
-import { parseTags, readKeyword } from './post-query.js';
+import { readKeyword, readTags } from './post-query.js';
 import { PostService } from './post.service.js';
 
 // 옛 @PageableDefault의 기본 크기다. 네 목록 모두 붙어 있었다.
@@ -51,7 +51,7 @@ export class PostController {
   async getPosts(@Query() query: Record<string, unknown>) {
     const paged = await this.posts.getPosts(
       parsePageable(query, DEFAULT_PAGE_SIZE),
-      parseTags(query.tags),
+      readTags(query),
     );
     return ResponseDto.of('게시물 목록 조회 성공', paged);
   }
@@ -134,7 +134,7 @@ export class PostController {
   async getHomeFeed(@Query() query: Record<string, unknown>) {
     const feed = await this.posts.getHomeFeed(
       parsePageable(query, DEFAULT_PAGE_SIZE),
-      parseTags(query.tags),
+      readTags(query),
     );
     return ResponseDto.of('홈 피드 조회 성공', feed);
   }

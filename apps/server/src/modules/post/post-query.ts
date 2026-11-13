@@ -7,7 +7,7 @@ import { firstQueryValue, javaTrim } from '../../common/spring-compat.js';
 // - 값이 여러 개면 있는 그대로 쓴다(쪼개지 않는다): tags=a&tags=b → [a, b], tags=a,b&tags=c → ["a,b", c].
 // 빈 목록은 "필터 없음"이다(옛 코드의 filterTags.isEmpty()).
 export function parseTags(value: unknown): string[] {
-  // Express는 같은 이름이 여러 번 올 때(tags[]=a 형태도) 배열로 준다. Spring은 값이 하나면 문자열, 여럿이면 배열로 다룬다.
+  // Express는 같은 이름이 여러 번 올 때 배열로 준다. Spring은 값이 하나면 문자열, 여럿이면 배열로 다룬다.
   const single = Array.isArray(value) && value.length === 1 ? value[0] : value;
   if (Array.isArray(single))
     return single.filter((tag): tag is string => typeof tag === 'string');
@@ -24,3 +24,8 @@ export function readKeyword(query: Record<string, unknown>): string {
     throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
   return keyword;
 }
+
+// 쿼리에서 tags를 꺼내 목록으로 바꾼다. Spring 6.2의 @RequestParam은 tags가 없을 때 tags[]를 읽는다(RequestParamMethodArgumentResolver).
+// Express 5의 기본 쿼리 해석기는 tags[]를 tags가 아닌 다른 이름으로 둬서, 같은 순서(tags 먼저, 없으면 tags[])로 직접 읽는다.
+export const readTags = (query: Record<string, unknown>): string[] =>
+  parseTags(query.tags ?? query['tags[]']);
