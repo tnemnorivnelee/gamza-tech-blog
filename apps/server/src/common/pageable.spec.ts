@@ -1,4 +1,4 @@
-import { parsePageable } from './pageable.js';
+import { parsePageable, parseSort, type SortOrder } from './pageable.js';
 
 const parse = (query: Record<string, unknown>, defaultSize = 10) =>
   parsePageable(query, defaultSize);
@@ -59,5 +59,88 @@ describe('parsePageable', () => {
 
   it('sort는 해석하지 않는다(글 목록은 요청의 sort를 무시한다)', () => {
     expect(parse({ sort: 'title,asc' })).toEqual({ page: 0, size: 10 });
+  });
+});
+
+describe('parseSort', () => {
+  const DEFAULT: SortOrder[] = [{ property: 'createdAt', direction: 'desc' }];
+  const sort = (value: unknown) => parseSort({ sort: value }, DEFAULT);
+
+  it('sort가 없거나 비었으면 기본 정렬이다', () => {
+    expect(parseSort({}, DEFAULT)).toBe(DEFAULT);
+    expect(sort('')).toBe(DEFAULT);
+    expect(sort(',')).toBe(DEFAULT);
+    expect(sort(',desc')).toBe(DEFAULT); // 속성이 빈 조각뿐이다
+    expect(sort(undefined)).toBe(DEFAULT);
+  });
+
+  it('속성과 방향을 읽는다', () => {
+    expect(sort('createdAt,desc')).toEqual([
+      { property: 'createdAt', direction: 'desc' },
+    ]);
+    expect(sort('id,asc')).toEqual([{ property: 'id', direction: 'asc' }]);
+  });
+
+  it('방향은 대소문자를 구분하지 않는다', () => {
+    expect(sort('id,DESC')).toEqual([{ property: 'id', direction: 'desc' }]);
+    expect(sort('id,Asc')).toEqual([{ property: 'id', direction: 'asc' }]);
+  });
+
+  it('방향이 없으면 오름차순이다', () => {
+    expect(sort('id')).toEqual([{ property: 'id', direction: 'asc' }]);
+    expect(sort('id,')).toEqual([{ property: 'id', direction: 'asc' }]); // 끝의 빈 조각은 버린다
+  });
+
+  it('방향 자리가 방향이 아니면 그 조각도 속성이다(다듬지 않는다)', () => {
+    expect(sort('createdAt, desc')).toEqual([
+      { property: 'createdAt', direction: 'asc' },
+      { property: ' desc', direction: 'asc' },
+    ]);
+    expect(sort('id,up')).toEqual([
+      { property: 'id', direction: 'asc' },
+      { property: 'up', direction: 'asc' },
+    ]);
+  });
+
+  // Java의 split은 끝의 빈 조각을 버려서 "id,desc,"의 마지막 실제 조각이 desc다.
+  it('끝에 쉼표가 더 있어도 방향을 읽는다', () => {
+    expect(sort('id,desc,')).toEqual([{ property: 'id', direction: 'desc' }]);
+  });
+
+  it('asc, desc로 시작할 뿐인 조각은 방향이 아니다', () => {
+    expect(sort('id,descending')).toEqual([
+      { property: 'id', direction: 'asc' },
+      { property: 'descending', direction: 'asc' },
+    ]);
+  });
+
+  it('공백뿐인 속성은 빈 속성처럼 건너뛴다(Spring의 hasText)', () => {
+    expect(sort(' ,desc')).toBe(DEFAULT);
+    expect(sort('id, ,desc')).toEqual([{ property: 'id', direction: 'desc' }]);
+  });
+
+  it('속성 여러 개에 방향 하나는 모두에 적용된다', () => {
+    expect(sort('createdAt,id,desc')).toEqual([
+      { property: 'createdAt', direction: 'desc' },
+      { property: 'id', direction: 'desc' },
+    ]);
+  });
+
+  it('여러 번 온 sort는 순서대로 모은다(배열)', () => {
+    expect(sort(['createdAt,desc', 'id,asc'])).toEqual([
+      { property: 'createdAt', direction: 'desc' },
+      { property: 'id', direction: 'asc' },
+    ]);
+  });
+
+  it('요청의 sort는 기본 정렬에 더해지지 않고 바꾼다', () => {
+    expect(sort('id,asc')).not.toContainEqual(DEFAULT[0]);
+  });
+
+  it('문자열이 아닌 값은 없는 것으로 본다(?sort[a]=b 같은 중첩)', () => {
+    expect(sort({ a: 'b' })).toBe(DEFAULT);
+    expect(sort([{ a: 'b' }, 'id,asc'])).toEqual([
+      { property: 'id', direction: 'asc' },
+    ]);
   });
 });

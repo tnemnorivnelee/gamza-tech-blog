@@ -3,8 +3,10 @@ import { ConfigModule } from '@nestjs/config';
 import { CommonModule } from './common/common.module.js';
 import { validateEnv } from './config/env.validation.js';
 import { AuthModule } from './modules/auth/auth.module.js';
+import { IntroModule } from './modules/introduction/intro.module.js';
 import { PostModule } from './modules/post/post.module.js';
 import { TagModule } from './modules/tag/tag.module.js';
+import { UserApiModule } from './modules/user/user-api.module.js';
 import { UserModule } from './modules/user/user.module.js';
 
 // 앱의 뿌리 모듈. Nest는 기능을 모듈 단위로 묶고, imports에 적은 모듈이 앱에 붙는다.
@@ -17,6 +19,8 @@ import { UserModule } from './modules/user/user.module.js';
     UserModule, // 사용자 조회
     PostModule, // 글 목록·상세·인기·홈 피드 조회
     TagModule, // 태그 목록 조회
+    IntroModule, // 소개 목록 조회
+    UserApiModule, // 프로필·활동·공개 프로필·승인 대기 목록 조회
   ],
 })
 export class AppModule {}

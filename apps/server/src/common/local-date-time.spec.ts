@@ -1,4 +1,4 @@
-import { toLocalDateTime } from './local-date-time.js';
+import { toLocalDateTime, toLocalDateTimeSeconds } from './local-date-time.js';
 
 describe('toLocalDateTime', () => {
   // DB에 적힌 서울 벽시계 값이 Date의 UTC 필드로 들어오는 약속이다(m4-prisma-plan.md 11절).
@@ -34,5 +34,17 @@ describe('toLocalDateTime', () => {
     expect(toLocalDateTime(new Date('2099-01-01T00:00:00.000Z'))).not.toMatch(
       /Z|\+/,
     );
+  });
+});
+
+describe('toLocalDateTimeSeconds', () => {
+  // UserProfileResponse의 날짜: 초까지만 쓴다. 밀리초가 있어도 소수점이 없고, 반올림하지 않고 버린다.
+  it.each([
+    ['2025-07-27T21:08:37.109Z', '2025-07-27T21:08:37'],
+    ['2025-07-27T21:08:37.999Z', '2025-07-27T21:08:37'],
+    ['2025-07-27T21:08:00.000Z', '2025-07-27T21:08:00'],
+    ['2025-12-31T23:59:59.999Z', '2025-12-31T23:59:59'],
+  ])('%s → %s', (iso, expected) => {
+    expect(toLocalDateTimeSeconds(new Date(iso))).toBe(expected);
   });
 });
