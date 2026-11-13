@@ -7,8 +7,9 @@ export class CommentResponse {
   @ApiPropertyOptional({ type: 'string' })
   writer?: string;
 
+  // 프로필 이미지가 없으면 키를 빼지 않고 null로 내보낸다(옛 record는 NON_NULL이 아니다).
   @ApiPropertyOptional({ type: 'string' })
-  writerProfileImageUrl?: string;
+  writerProfileImageUrl?: string | null;
 
   @ApiPropertyOptional({ type: 'string' })
   content?: string;

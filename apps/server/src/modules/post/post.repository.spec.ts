@@ -1,42 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
-import { PrismaMariaDb } from '@prisma/adapter-mariadb';
-import { loadEnv } from 'vite';
 import type { PageRequest } from '../../common/pageable.js';
 import type { EnvironmentVariables } from '../../config/env.validation.js';
-import { PrismaClient } from '../../infra/prisma/generated/client.js';
 import { PrismaService } from '../../infra/prisma/prisma.service.js';
+import {
+  databaseReachable as reachable,
+  databaseUrl as url,
+} from '../../../test/support/test-database.js';
 import { PostRepository } from './post.repository.js';
 
 // 진짜 MySQL로 하는 시험이다(docs/m5-read-api-plan.md D5). 태그 필터의 OR, 검색의 와일드카드, 정렬, 개수는 가짜로는 증명할 수 없다.
-// 접속 방식은 prisma-user.repository.spec.ts와 같다: CI는 환경변수로, 로컬에서는 apps/server/.env에서 이 시험만 직접 읽는다.
-const url =
-  process.env.DATABASE_URL ||
-  loadEnv('test', process.cwd(), 'DATABASE_').DATABASE_URL;
-
-async function canConnect(): Promise<boolean> {
-  if (!url) return false;
-  const probeUrl = new URL(url);
-  probeUrl.searchParams.set('acquireTimeout', '2000');
-  const probe = new PrismaClient({
-    adapter: new PrismaMariaDb(probeUrl.toString()),
-  });
-  try {
-    await probe.$queryRaw`SELECT 1 FROM posts LIMIT 1`;
-    return true;
-  } catch {
-    return false;
-  } finally {
-    await probe.$disconnect();
-  }
-}
-
-const reachable = await canConnect();
-if (!reachable && process.env.CI) {
-  throw new Error(
-    'CI인데 DB에 연결할 수 없거나 posts 테이블이 없습니다. .github/workflows/ci.yml의 services.mysql과 migrate deploy 단계를 확인하세요.',
-  );
-}
+// 접속과 건너뛰기 판단은 test/support/test-database.ts가 한다.
 
 // 시험이 만든 사용자의 githubId 접두사다. 실제 회원은 g_<숫자>이고, prisma-user.repository.spec.ts의 g_test_와도 겹치지 않게 했다.
 // 파일은 병렬로 돌기 때문에, g_test_로 시작하면 저쪽 afterEach가 이쪽 사용자를 지우다 외래 키 오류를 낸다.
@@ -65,6 +39,10 @@ describe.skipIf(!reachable)('PostRepository (진짜 MySQL)', () => {
     const mine = { githubId: { startsWith: PREFIX } };
     const ofMine = { post: { user: mine } };
     await prisma.like.deleteMany({ where: ofMine });
+    // 답글(대댓글)이 부모 댓글을 가리키는 외래 키가 있어서 답글부터 지운다.
+    await prisma.comment.deleteMany({
+      where: { ...ofMine, parentCommentId: { not: null } },
+    });
     await prisma.comment.deleteMany({ where: ofMine });
     await prisma.postImage.deleteMany({ where: ofMine });
     await prisma.postTag.deleteMany({ where: ofMine });
@@ -490,6 +468,226 @@ describe.skipIf(!reachable)('PostRepository (진짜 MySQL)', () => {
       expect(await repo.findPostsByWriter(first(), `${PREFIX}없음`)).toEqual(
         empty,
       );
+    });
+  });
+
+  const likePost = (post: { postId: bigint }, user: { userId: bigint }) =>
+    prisma.like.create({
+      data: {
+        postId: post.postId,
+        userId: user.userId,
+        createdAt: NOW,
+        updatedAt: NOW,
+      },
+    });
+
+  const addComment = (
+    post: { postId: bigint },
+    user: { userId: bigint },
+    {
+      content = '댓글',
+      createdAt,
+      parentCommentId,
+    }: { content?: string; createdAt: Date; parentCommentId?: bigint },
+  ) =>
+    prisma.comment.create({
+      data: {
+        content,
+        createdAt,
+        updatedAt: createdAt,
+        postId: post.postId,
+        userId: user.userId,
+        parentCommentId,
+      },
+    });
+
+  describe('findPostDetail', () => {
+    it('글이 없으면 null이다', async () => {
+      expect(await repo.findPostDetail(9223372036854775807n)).toBeNull();
+    });
+
+    it('글, 작성자, 좋아요 수, 태그(연결한 순서)를 준다', async () => {
+      const author = await createUser('https://img.test/writer.png');
+      const [a, b, c] = [newTag('a-'), newTag('b-'), newTag('c-')];
+      const post = await createPost(author, {
+        title: '상세',
+        content: '본문 ![x](https://img.test/x.png) 끝',
+        createdAt: at(5),
+        tags: [b, a, c],
+      });
+      await likePost(post, await createUser());
+      await likePost(post, await createUser());
+
+      const detail = await repo.findPostDetail(post.postId);
+      expect(detail).toEqual({
+        postId: Number(post.postId),
+        title: '상세',
+        // 상세는 본문을 있는 그대로 준다(이미지 표기도 지우지 않는다).
+        content: '본문 ![x](https://img.test/x.png) 끝',
+        writer: author.nickname,
+        writerProfileImageUrl: 'https://img.test/writer.png',
+        githubId: author.githubId,
+        likesCount: 2,
+        createdAt: at(5),
+        updatedAt: at(5),
+        tags: [b, a, c],
+        comments: [],
+      });
+    });
+
+    it('프로필 이미지가 없으면 null이고, 태그와 댓글이 없으면 빈 목록이다', async () => {
+      const author = await createUser();
+      const post = await createPost(author, { createdAt: at(1) });
+      const detail = await repo.findPostDetail(post.postId);
+      expect(detail).toMatchObject({
+        writerProfileImageUrl: null,
+        likesCount: 0,
+        tags: [],
+        comments: [],
+      });
+    });
+
+    it('좋아요 수는 이 글의 것만 센다', async () => {
+      const author = await createUser();
+      const liker = await createUser();
+      const target = await createPost(author, { createdAt: at(1) });
+      const other = await createPost(author, { createdAt: at(2) });
+      await likePost(other, liker);
+      await likePost(other, author);
+      await likePost(target, liker);
+
+      expect((await repo.findPostDetail(target.postId))?.likesCount).toBe(1);
+      expect((await repo.findPostDetail(other.postId))?.likesCount).toBe(2);
+    });
+
+    it('댓글은 이 글의 것만, 최상위와 답글을 구분 없이 작성 시각 내림차순(같으면 commentId 내림차순)으로 준다', async () => {
+      const author = await createUser();
+      const writer = await createUser('https://img.test/commenter.png');
+      const bare = await createUser();
+      const post = await createPost(author, { createdAt: at(1) });
+      const elsewhere = await createPost(author, { createdAt: at(2) });
+      await addComment(elsewhere, writer, {
+        content: '딴 글',
+        createdAt: at(50),
+      });
+
+      const c1 = await addComment(post, writer, {
+        content: 'c1',
+        createdAt: at(10),
+      });
+      await addComment(post, bare, { content: 'c2', createdAt: at(30) });
+      await addComment(post, writer, { content: 'c3', createdAt: at(20) });
+      await addComment(post, bare, {
+        content: 'r1',
+        createdAt: at(40),
+        parentCommentId: c1.commentId,
+      });
+      // c2와 같은 시각이다. 나중에 만들었으니 commentId가 커서 c2보다 앞에 온다.
+      await addComment(post, bare, { content: 'c4', createdAt: at(30) });
+
+      const detail = await repo.findPostDetail(post.postId);
+      expect(detail?.comments.map((comment) => comment.content)).toEqual([
+        'r1',
+        'c4',
+        'c2',
+        'c3',
+        'c1',
+      ]);
+      const byContent = Object.fromEntries(
+        detail!.comments.map((comment) => [comment.content, comment]),
+      );
+      expect(byContent.r1.parentCommentId).toBe(Number(c1.commentId));
+      expect(byContent.c1).toMatchObject({
+        commentId: Number(c1.commentId),
+        parentCommentId: null,
+        writer: writer.nickname,
+        writerProfileImageUrl: 'https://img.test/commenter.png',
+        createdAt: at(10),
+      });
+      expect(byContent.c2).toMatchObject({
+        writer: bare.nickname,
+        writerProfileImageUrl: null,
+      });
+    });
+  });
+
+  describe('findWeeklyPopularPosts', () => {
+    // 기준 시각보다 늦은 글만 후보라서, 복원한 실제 글(2026년 이전)은 2099년 기준 시각에 걸리지 않는다.
+    const SINCE = at(0);
+
+    it('기준 시각보다 늦게 쓴 글만 후보다(같은 시각은 뺀다)', async () => {
+      const author = await createUser();
+      await createPost(author, { title: 'before', createdAt: at(-1) });
+      await createPost(author, { title: 'same', createdAt: at(0) });
+      await createPost(author, { title: 'after', createdAt: at(1) });
+
+      const popular = await repo.findWeeklyPopularPosts(SINCE, 3);
+      expect(popular.map((post) => post.title)).toEqual(['after']);
+    });
+
+    it('좋아요 많은 순, 같으면 최신순, 그래도 같으면 postId가 큰 쪽이 먼저다', async () => {
+      const author = await createUser();
+      const [l1, l2] = [await createUser(), await createUser()];
+      const twoOld = await createPost(author, {
+        title: 'twoOld',
+        createdAt: at(1),
+      });
+      const oneMid = await createPost(author, {
+        title: 'oneMid',
+        createdAt: at(2),
+      });
+      const twoNew = await createPost(author, {
+        title: 'twoNew',
+        createdAt: at(3),
+      });
+      const twoNewer = await createPost(author, {
+        title: 'twoNewer',
+        createdAt: at(3),
+      });
+      await createPost(author, { title: 'zero', createdAt: at(5) });
+      for (const post of [twoOld, twoNew, twoNewer])
+        for (const liker of [l1, l2]) await likePost(post, liker);
+      await likePost(oneMid, l1);
+
+      const popular = await repo.findWeeklyPopularPosts(SINCE, 10);
+      expect(popular.map((post) => post.title)).toEqual([
+        'twoNewer', // 좋아요 2개, 시각 3, postId가 가장 큼
+        'twoNew', // 좋아요 2개, 시각 3
+        'twoOld', // 좋아요 2개, 시각 1
+        'oneMid', // 좋아요 1개
+        'zero', // 좋아요 0개도 후보다
+      ]);
+    });
+
+    it('limit만큼만 준다', async () => {
+      const author = await createUser();
+      for (const seconds of [1, 2, 3, 4])
+        await createPost(author, { createdAt: at(seconds) });
+      expect(await repo.findWeeklyPopularPosts(SINCE, 3)).toHaveLength(3);
+    });
+
+    it('글 번호, 제목, 작성자 닉네임, 프로필 이미지(없으면 null)를 준다', async () => {
+      const [withImage, bare] = [
+        await createUser('https://img.test/w.png'),
+        await createUser(),
+      ];
+      const a = await createPost(withImage, { title: 'a', createdAt: at(2) });
+      const b = await createPost(bare, { title: 'b', createdAt: at(1) });
+
+      expect(await repo.findWeeklyPopularPosts(SINCE, 3)).toEqual([
+        {
+          postId: Number(a.postId),
+          title: 'a',
+          writer: withImage.nickname,
+          writerProfileImageUrl: 'https://img.test/w.png',
+        },
+        {
+          postId: Number(b.postId),
+          title: 'b',
+          writer: bare.nickname,
+          writerProfileImageUrl: null,
+        },
+      ]);
     });
   });
 });

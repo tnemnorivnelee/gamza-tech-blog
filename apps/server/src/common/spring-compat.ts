@@ -15,6 +15,44 @@ export function firstQueryValue(value: unknown): string | undefined {
   return typeof first === 'string' ? first : undefined;
 }
 
+// Java의 Character.isWhitespace: 탭·줄바꿈·구분 제어 문자(0x1C~0x1F)와 공백류에서, 줄바꿈 안 되는 공백(0xA0, 0x2007, 0x202F)을 뺀 것이다.
+// JS의 \s와 다르다(NBSP와 BOM을 포함한다). 코드 값으로 판정한다.
+const isJavaWhitespace = (code: number) =>
+  (code >= 0x09 && code <= 0x0d) ||
+  (code >= 0x1c && code <= 0x20) ||
+  code === 0x1680 ||
+  (code >= 0x2000 && code <= 0x2006) ||
+  (code >= 0x2008 && code <= 0x200a) ||
+  code === 0x2028 ||
+  code === 0x2029 ||
+  code === 0x205f ||
+  code === 0x3000;
+const stripJavaWhitespace = (text: string) =>
+  Array.from(text)
+    .filter((char) => !isJavaWhitespace(char.codePointAt(0) ?? 0))
+    .join('');
+const INT64_MIN = -(2n ** 63n);
+const INT64_MAX = 2n ** 63n - 1n;
+
+// Spring의 @PathVariable Long 변환(StringToNumberConverterFactory → NumberUtils.parseNumber)이다.
+// 공백을 전부 지우고(안쪽 공백도), 16진수(0x, 0X, #로 시작, 앞에 - 가능)면 Long.decode, 아니면 Long.valueOf(부호 +, - 가능)로 읽는다.
+// 숫자가 아니거나 int64 범위를 넘으면 NumberFormatException이라 undefined다. 2^53을 넘는 값이 있어서 bigint로 돌려준다.
+// shortcut: 숫자는 ASCII만 받는다(parseJavaInt와 같다).
+export function parseSpringLong(text: string): bigint | undefined {
+  const trimmed = stripJavaWhitespace(text);
+  const hex = /^(-?)(?:0[xX]|#)([0-9a-fA-F]+)$/.exec(trimmed);
+  let value: bigint;
+  if (hex) {
+    const magnitude = BigInt(`0x${hex[2]}`);
+    value = hex[1] ? -magnitude : magnitude;
+  } else if (/^[+-]?\d+$/.test(trimmed)) {
+    value = BigInt(trimmed);
+  } else {
+    return undefined;
+  }
+  return value >= INT64_MIN && value <= INT64_MAX ? value : undefined;
+}
+
 const INT32_MIN = -(2 ** 31);
 const INT32_MAX = 2 ** 31 - 1;
 

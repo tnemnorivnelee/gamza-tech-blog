@@ -15,7 +15,7 @@ const contract = JSON.parse(
   ),
 ) as Contract;
 
-// 시험 단계에서는 가짜 컨트롤러가 흉내 내는 작업과 실제로 옮긴 작업(reissue, logout, 글 목록 4개)만 비교한다.
+// 시험 단계에서는 가짜 컨트롤러가 흉내 내는 작업과 실제로 옮긴 작업(reissue, logout, 글 목록 4개, 글 상세·인기·홈 피드·태그)만 비교한다.
 // 실제 컨트롤러가 늘면 이 목록을 없애고 계약 전체와 비교한다.
 // 합격 기준: 비교 결과가 빈 목록이어야 한다. 데코레이터로 표현이 안 되면 생성된 문서를 후처리해도 되지만
 // 판정은 이 비교가 한다.
@@ -31,6 +31,10 @@ const TRIAL = {
     'getPostsByTag',
     'searchPosts',
     'getMyPosts',
+    'getPostDetail',
+    'getWeeklyPopularPosts',
+    'getHomeFeed',
+    'getAllTags',
   ],
   models: ['Pageable'],
 };
@@ -69,9 +73,9 @@ describe('OpenAPI 계약', () => {
     it('없는 작업', () => {
       // 아직 옮기지 않은 작업이어야 한다. 옮기면 다른 것으로 바꾼다.
       const problems = diffContract(contract, doc, {
-        operations: ['getPostDetail'],
+        operations: ['getIntroList'],
       });
-      expect(problems).toContain('getPostDetail: 작업이 없다');
+      expect(problems).toContain('getIntroList: 작업이 없다');
     });
 
     it('빠진 필드', () => {

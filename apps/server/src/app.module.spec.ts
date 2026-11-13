@@ -7,6 +7,8 @@ import { JwtTokenService } from './modules/auth/jwt-token.service.js';
 import { RedisTokenStore } from './modules/auth/redis-token-store.js';
 import { TokenStore } from './modules/auth/token-store.js';
 import { PrismaUserRepository } from './modules/user/prisma-user.repository.js';
+import { PostController } from './modules/post/post.controller.js';
+import { TagController } from './modules/tag/tag.controller.js';
 import { UserRepository } from './modules/user/user.repository.js';
 
 describe('AppModule', () => {
@@ -24,6 +26,9 @@ describe('AppModule', () => {
     expect(moduleRef.get(TokenStore)).toBeInstanceOf(RedisTokenStore);
     // GitHub 요청 클라이언트는 fetch 구현이다(auth.module.ts). 환경변수가 비어 있어도 만들어지고, 부를 때 막힌다.
     expect(moduleRef.get(GithubClient)).toBeInstanceOf(FetchGithubClient);
+    // 옮긴 컨트롤러가 앱에 실제로 등록됐는지 본다. 다른 시험은 컨트롤러를 직접 넣어서, 모듈 등록을 빠뜨려도 통과한다.
+    expect(moduleRef.get(PostController)).toBeInstanceOf(PostController);
+    expect(moduleRef.get(TagController)).toBeInstanceOf(TagController);
     // 연결은 첫 명령을 보낼 때 열린다(lazyConnect). 그래서 이 시험은 Redis 없이도 끝나고, 앱을 닫으면 연결 객체도 끝난다.
     const redis = moduleRef.get(Redis);
     expect(redis.status).toBe('wait');

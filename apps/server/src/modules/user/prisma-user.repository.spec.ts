@@ -1,48 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
-import { PrismaMariaDb } from '@prisma/adapter-mariadb';
-import { loadEnv } from 'vite';
 import type { EnvironmentVariables } from '../../config/env.validation.js';
-import { PrismaClient } from '../../infra/prisma/generated/client.js';
 import { PrismaService } from '../../infra/prisma/prisma.service.js';
+import {
+  databaseReachable as reachable,
+  databaseUrl as url,
+} from '../../../test/support/test-database.js';
 import { PrismaUserRepository } from './prisma-user.repository.js';
 import type { NewUser } from './user.repository.js';
 
 // 진짜 MySQL로 하는 시험이다(m4-prisma-plan.md D8). unique 제약, SQL의 비어 있음 판정, 시각의 시간대는 가짜로는 증명할 수 없다.
-// 접속 주소는 앱과 같은 환경변수 DATABASE_URL이다. CI는 환경변수로 주고, 로컬에서는 apps/server/.env에서 이 시험만 직접 읽는다.
-// 개발용 DB에는 복원한 실제 회원 데이터가 있어서 vitest.config.ts는 이 주소를 시험 전체에 넣지 않는다. 다른 시험이 실수로 기본 저장소
-// (Prisma)를 쓰더라도 주소가 없어서 DB에 닿지 못하고 실패한다.
-const url =
-  process.env.DATABASE_URL ||
-  loadEnv('test', process.cwd(), 'DATABASE_').DATABASE_URL;
-
-// 연결되고 users 테이블이 있는지 먼저 본다. 안 되면 다시 시도하지 않고 바로 false다.
-// acquireTimeout: 닿지 않는 DB에서 기다리는 시간. 기본값이면 건너뛰기 전에 20초를 기다린다.
-async function canConnect(): Promise<boolean> {
-  if (!url) return false;
-  const probeUrl = new URL(url);
-  probeUrl.searchParams.set('acquireTimeout', '2000');
-  const probe = new PrismaClient({
-    adapter: new PrismaMariaDb(probeUrl.toString()),
-  });
-  try {
-    await probe.$queryRaw`SELECT 1 FROM users LIMIT 1`;
-    return true;
-  } catch {
-    return false;
-  } finally {
-    await probe.$disconnect();
-  }
-}
-
-const reachable = await canConnect();
-// 로컬에는 DB가 없을 수 있어 건너뛴다. 하지만 CI에는 서비스 컨테이너가 항상 있어야 하므로, 건너뛰지 않고 실패시킨다.
-// 조용히 건너뛰면 CI가 통과해도 DB는 한 번도 시험되지 않는다.
-if (!reachable && process.env.CI) {
-  throw new Error(
-    'CI인데 DB에 연결할 수 없거나 users 테이블이 없습니다. .github/workflows/ci.yml의 services.mysql과 migrate deploy 단계를 확인하세요.',
-  );
-}
+// 접속과 건너뛰기 판단은 test/support/test-database.ts가 한다.
 
 // 시험이 만든 사용자의 githubId 접두사. 실제 회원은 g_<숫자>라서 겹치지 않는다. 시험마다 끝나면 이 접두사 행만 지운다.
 // 개발용 DB에는 복원한 실제 데이터가 있으므로 다른 행은 건드리지 않는다.
