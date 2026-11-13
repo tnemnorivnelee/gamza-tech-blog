@@ -39,7 +39,8 @@ export interface SortOrder {
 //   조각은 다듬지 않는다(sort=createdAt, desc의 " desc"는 방향이 아니라 속성이 된다). 빈 속성은 건너뛴다.
 // - 하나도 안 남으면(sort가 없거나 비었으면) defaultSort다. 요청의 sort는 기본 정렬에 더해지지 않고 통째로 바꾼다.
 // shortcut: 끝 조각 ignorecase(sort=content,asc,ignorecase), 점만 있는 조각 걸러내기, 값을 한 번 더 URL 디코딩하는 Spring의 동작은 옮기지 않는다. ignorecase는 속성 이름이 되어 저장소의 허용 목록에서 걸러진다.
-// Spring은 sort[]=a를 sort로 읽지 않지만 Express는 배열로 합쳐서 읽는다. 쓰는 곳이 생기면 더한다(Spring Data Commons의 SortHandlerMethodArgumentResolver로 확인함).
+// 쓰는 곳이 생기면 더한다(옛 서버의 Spring Data Commons 3.4.0 소스로 확인함: SortHandlerMethodArgumentResolver, 기본 정렬은 PageableHandlerMethodArgumentResolver가 고른다).
+// sort[]=a는 Spring도 Express 5도 sort로 읽지 않는다(둘 다 기본 정렬).
 export function parseSort(
   query: Record<string, unknown>,
   defaultSort: readonly SortOrder[],

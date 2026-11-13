@@ -115,6 +115,14 @@ describe('GET /api/v1/intros', () => {
   });
 
   // 글 목록과 달리 소개 목록은 요청의 sort를 반영한다. 요청의 sort는 기본 정렬을 바꾼다(더하지 않는다).
+  // Spring은 sort[]를 sort로 읽지 않는다. Express 5의 기본 쿼리 해석기(querystring)도 sort[]를 다른 이름으로 둬서 같다.
+  it('sort[]=id,asc(대괄호)는 sort가 아니라서 기본 정렬이다', async () => {
+    await t.get('/api/v1/intros?sort[]=id,asc');
+    expect(t.service.getIntroList.mock.calls[0][1]).toEqual([
+      { property: 'createdAt', direction: 'desc' },
+    ]);
+  });
+
   it.each([
     ['sort=id,asc', [{ property: 'id', direction: 'asc' }]],
     ['sort=createdAt', [{ property: 'createdAt', direction: 'asc' }]],
