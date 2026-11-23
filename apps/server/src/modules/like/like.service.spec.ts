@@ -1,5 +1,6 @@
 import { BusinessException } from '../../common/error/business.exception.js';
 import { ErrorCode } from '../../common/error/error-code.js';
+import { createReadCache } from '../../../test/support/fake-redis.js';
 import type {
   LikePage,
   LikeRepository,
@@ -28,9 +29,12 @@ function setup(page: LikePage, liked: boolean | null = true) {
     findMyLikePage: vi.fn().mockResolvedValue(page),
     isPostLikedBy: vi.fn().mockResolvedValue(liked),
   };
+  // 캐시는 가짜 Redis 위의 진짜 ReadCache다. 시험마다 새로 만들어서 앞 시험의 캐시가 남지 않는다.
+  const { redis, cache } = createReadCache();
   return {
     repo,
-    service: new LikeService(repo as unknown as LikeRepository),
+    redis,
+    service: new LikeService(repo as unknown as LikeRepository, cache),
   };
 }
 
@@ -131,6 +135,48 @@ describe('LikeService.getMyLikes', () => {
     const response = await service.getMyLikes('octo', { page: 0, size: 10 });
     expect(response.totalPages).toBe(0);
   });
+
+  // 옛 @Cacheable(myLikes): 키는 "사용자-쪽-크기-정렬"이고 unless가 없다. 여기서는 사용자 id 대신 githubId를 쓰고 정렬은 뺀다(응답이 sort를 읽지 않는다).
+  describe('읽기 캐시', () => {
+    const first = { page: 0, size: 10 };
+
+    it('myLikes 이름으로 5분 동안 저장하고, 다시 부르면 저장소를 부르지 않고 같은 값을 준다(null 태그도 그대로)', async () => {
+      const { service, repo, redis } = setup({
+        likes: [like(1, { tags: [null] }), like(2)],
+        totalElements: 2,
+      });
+      const miss = await service.getMyLikes('octo', first);
+      expect(redis.ttls.get('cache:myLikes:octo-0-10')).toBe(300);
+      const hit = await service.getMyLikes('octo', first);
+      expect(hit).toEqual(miss);
+      expect(hit.content[0].tags).toEqual([null]);
+      expect(repo.findMyLikePage).toHaveBeenCalledTimes(1);
+    });
+
+    it('사용자, 쪽 번호, 크기가 다르면 따로 저장한다', async () => {
+      const { service, repo, redis } = setup({ likes: [], totalElements: 0 });
+      await service.getMyLikes('octo', first);
+      await service.getMyLikes('boss', first);
+      await service.getMyLikes('octo', { page: 1, size: 10 });
+      await service.getMyLikes('octo', { page: 0, size: 5 });
+      expect([...redis.values.keys()].sort()).toEqual([
+        'cache:myLikes:boss-0-10',
+        'cache:myLikes:octo-0-10',
+        'cache:myLikes:octo-0-5',
+        'cache:myLikes:octo-1-10',
+      ]);
+      expect(repo.findMyLikePage).toHaveBeenCalledTimes(4);
+    });
+
+    // 글 목록과 달리 옛 myLikes에는 unless가 없어서 빈 쪽도 저장했다.
+    it('빈 쪽도 저장한다', async () => {
+      const { service, repo, redis } = setup({ likes: [], totalElements: 0 });
+      await service.getMyLikes('octo', first);
+      await service.getMyLikes('octo', first);
+      expect(redis.values.size).toBe(1);
+      expect(repo.findMyLikePage).toHaveBeenCalledTimes(1);
+    });
+  });
 });
 
 describe('LikeService.isPostLiked', () => {
@@ -145,5 +191,15 @@ describe('LikeService.isPostLiked', () => {
     await expect(service.isPostLiked('octo', 7n)).rejects.toThrow(
       new BusinessException(ErrorCode.POST_NOT_FOUND),
     );
+  });
+
+  // 옛 isPostLiked에는 @Cacheable이 없었다. 누른 직후 바로 바뀌어 보여야 해서 캐시를 걸지 않는다.
+  it('캐시를 거치지 않는다', async () => {
+    const { service, repo, redis } = setup({ likes: [], totalElements: 0 });
+    await service.isPostLiked('octo', 7n);
+    await service.isPostLiked('octo', 7n);
+    expect(redis.get).not.toHaveBeenCalled();
+    expect(redis.values.size).toBe(0);
+    expect(repo.isPostLikedBy).toHaveBeenCalledTimes(2);
   });
 });

@@ -1,3 +1,4 @@
+import { createReadCache } from '../../../test/support/fake-redis.js';
 import type { IntroPage, IntroRepository } from './intro.repository.js';
 import { IntroService } from './intro.service.js';
 
@@ -5,9 +6,12 @@ const DEFAULT = [{ property: 'createdAt', direction: 'desc' }] as const;
 
 function setup(page: IntroPage) {
   const repo = { findIntroPage: vi.fn().mockResolvedValue(page) };
+  // 캐시는 가짜 Redis 위의 진짜 ReadCache다. 시험마다 새로 만들어서 앞 시험의 캐시가 남지 않는다.
+  const { redis, cache } = createReadCache();
   return {
     repo,
-    service: new IntroService(repo as unknown as IntroRepository),
+    redis,
+    service: new IntroService(repo as unknown as IntroRepository, cache),
   };
 }
 
@@ -85,5 +89,53 @@ describe('IntroService', () => {
       { page: 1, size: 4 },
       orders,
     );
+  });
+
+  // 옛 @Cacheable(introsList): 키는 'p:쪽:s:크기:sort:정렬'이고 정렬은 Spring Sort.toString() 모양이다. unless가 없다.
+  describe('읽기 캐시', () => {
+    const first = { page: 0, size: 10 };
+
+    it('introsList 이름으로 5분 동안 저장하고, 다시 부르면 저장소를 부르지 않고 같은 값을 준다', async () => {
+      const { service, repo, redis } = setup({
+        intros: [intro(1, 'https://img.test/a.png'), intro(2)],
+        totalElements: 2,
+      });
+      const miss = await service.getIntroList(first, DEFAULT);
+      expect(
+        redis.ttls.get('cache:introsList:p:0:s:10:sort:createdAt: DESC'),
+      ).toBe(300);
+      expect(await service.getIntroList(first, DEFAULT)).toEqual(miss);
+      expect(repo.findIntroPage).toHaveBeenCalledTimes(1);
+    });
+
+    it('정렬이 여럿이면 쉼표만으로 잇는다(공백 없음)', async () => {
+      const { service, redis } = setup({ intros: [], totalElements: 0 });
+      await service.getIntroList(first, [
+        { property: 'content', direction: 'asc' },
+        { property: 'id', direction: 'desc' },
+      ]);
+      expect([...redis.values.keys()]).toEqual([
+        'cache:introsList:p:0:s:10:sort:content: ASC,id: DESC',
+      ]);
+    });
+
+    it('쪽 번호, 크기, 정렬이 다르면 따로 저장한다', async () => {
+      const { service, repo, redis } = setup({ intros: [], totalElements: 0 });
+      await service.getIntroList(first, DEFAULT);
+      await service.getIntroList({ page: 1, size: 10 }, DEFAULT);
+      await service.getIntroList({ page: 0, size: 5 }, DEFAULT);
+      await service.getIntroList(first, [{ property: 'id', direction: 'asc' }]);
+      expect(redis.values.size).toBe(4);
+      expect(repo.findIntroPage).toHaveBeenCalledTimes(4);
+    });
+
+    // 글 목록과 달리 옛 introsList에는 unless가 없어서 빈 쪽도 저장했다.
+    it('빈 쪽도 저장한다', async () => {
+      const { service, repo, redis } = setup({ intros: [], totalElements: 0 });
+      await service.getIntroList(first, DEFAULT);
+      await service.getIntroList(first, DEFAULT);
+      expect(redis.values.size).toBe(1);
+      expect(repo.findIntroPage).toHaveBeenCalledTimes(1);
+    });
   });
 });
