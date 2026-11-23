@@ -3,7 +3,9 @@ import { ConfigModule } from '@nestjs/config';
 import { CommonModule } from './common/common.module.js';
 import { validateEnv } from './config/env.validation.js';
 import { AuthModule } from './modules/auth/auth.module.js';
+import { CommentModule } from './modules/comment/comment.module.js';
 import { IntroModule } from './modules/introduction/intro.module.js';
+import { LikeModule } from './modules/like/like.module.js';
 import { PostModule } from './modules/post/post.module.js';
 import { TagModule } from './modules/tag/tag.module.js';
 import { UserModule } from './modules/user/user.module.js';
@@ -19,6 +21,8 @@ import { UserModule } from './modules/user/user.module.js';
     PostModule, // 글 목록·상세·인기·홈 피드 조회
     TagModule, // 태그 목록 조회
     IntroModule, // 소개 목록 조회
+    CommentModule, // 내 댓글 목록 조회
+    LikeModule, // 내 좋아요 목록·좋아요 여부 조회
   ],
 })
 export class AppModule {}

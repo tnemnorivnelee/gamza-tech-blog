@@ -1,6 +1,6 @@
 # M5 읽기 API 계획
 
-작성일 2026-11-10 · 상태: M5-1(13절)·M5-2(14절)·M5-3(15절) 구현됨, M5-4~M5-6 대기 · 이슈 #46, #48, #50 · 관련: `backend-plan.md` 5·7·11절, `m4-prisma-plan.md`, `improvement-candidates.md` 22~27번, `porting-principle.md`
+작성일 2026-11-10 · 상태: M5-1(13절)·M5-2(14절)·M5-3(15절)·M5-4(16절) 구현됨, M5-5·M5-6 대기 · 이슈 #46, #48, #50, #52 · 관련: `backend-plan.md` 5·7·11절, `m4-prisma-plan.md`, `improvement-candidates.md` 22~27번, `porting-principle.md`
 
 확인 기준: 옛 백엔드 `potato-club/GamzaTechBlog-back`의 `master`와 프론트 `potato-club/GamzaTechBlog-front`는 읽기만 했다(코드를 실행하지 않았다). 복원한 로컬 DB는 합계만 조회했다(개인정보 행은 보지 않았다). Spring 동작은 공식 문서와 Spring Data 소스로 확인했다. 표시: **[확인함]** 코드·문서에서 직접 확인, **[추정]** 자료로 짐작함, **[미검증]** 아직 확인할 방법이 없음. 운영 중이던 서버의 실제 응답은 못 봤으므로 "옛 동작"은 `master` 코드 기준이다.
 
@@ -28,7 +28,7 @@ M5는 프론트가 쓰는 **읽기 API 17개**를 복원한 DB 위에서 옛 서
 
 - **응답 래퍼**: `ResponseDto{status, message, data, timestamp}`. 이미 M1에서 만들었다. 메시지 문자열도 동작이므로 그대로 옮긴다(3.2~3.9에 적었다).
 - **페이지 해석**(Spring 공식 설정과 Spring Data 소스로 확인): 요청 파라미터는 `page`, `size`, `sort`이고 페이지는 0부터 센다. 기본값은 `@PageableDefault`가 붙은 곳은 **크기 10**, 안 붙은 곳은 **크기 20**이다. `page`가 음수이거나 숫자가 아니면 0, `size`가 1 미만이거나 숫자가 아니면 기본 크기, 2000을 넘으면 2000으로 보정한다. 비어 있으면 기본값이다. 어떤 값도 오류가 되지 않는다.
-- **정렬**: 글 목록 계열과 좋아요 목록은 요청의 `sort`를 **무시하고** 항상 `createdAt` 내림차순으로 고정되어 있다. 소개 목록(`findAll(pageable)`)은 요청의 `sort`를 반영한다(기본 `createdAt` 내림차순). 내 댓글 목록은 메서드 이름의 `createdAt` 내림차순에 요청의 `sort`가 덧붙는다 **[추정: Spring Data의 일반 동작]**. 소개·댓글에서 없는 속성으로 정렬하면 처리되지 않은 예외라서 500 `C004`가 된다 **[추정]**.
+- **정렬**: 글 목록 계열과 좋아요 목록은 요청의 `sort`를 **무시하고** 항상 `createdAt` 내림차순으로 고정되어 있다. 소개 목록(`findAll(pageable)`)은 요청의 `sort`를 반영한다(기본 `createdAt` 내림차순). 내 댓글 목록은 메서드 이름의 `createdAt` 내림차순이 먼저이고 요청의 `sort`(없으면 기본 `createdAt` 내림차순)가 그 뒤에 붙는다 **[확인함: Spring Data Commons 3.4.0 `AbstractQueryCreator.createQuery`의 `tree.getSort().and(dynamicSort)`, Spring Data JPA 3.4.0 `PartTreeJpaQuery`의 `getDynamicSort`]**. 그래서 요청의 `sort`는 같은 시각 안의 순서만 정하고 단 시각 순서를 뒤집지 못한다. 소개·댓글에서 없는 속성으로 정렬하면 처리되지 않은 예외라서 500 `C004`가 된다 **[추정]**.
 - **`sort` 문법** **[확인함: 옛 서버의 Spring Boot 3.4.0이 쓰는 Spring Data Commons 3.4.0 소스 `SortHandlerMethodArgumentResolver`, M5-3에서 소개 목록에 구현]**: `sort=속성,방향`이고 여러 번 올 수 있다. 쉼표로 쪼갠 마지막 조각이 `asc`·`desc`(대소문자 무시)이면 방향이고, 아니면 오름차순이다. 나머지 조각은 모두 속성이다(`sort=a,b,desc`는 둘 다 내림차순). 조각은 다듬지 않고(`createdAt, desc`의 ` desc`는 방향이 아니라 속성이다) 비거나 공백뿐인 속성은 건너뛴다. 요청에 `sort`가 없거나(`sort=`도 같다) 해석한 결과가 비면 `PageableHandlerMethodArgumentResolver`가 `@PageableDefault`의 기본 정렬을 쓰고(`!sort.isSorted()`), 하나라도 읽히면 기본 정렬을 **바꾼다**(더하지 않는다). `sort[]=`(대괄호)는 읽지 않는다(`getParameterValues("sort")`뿐이고 Express 5도 다른 이름으로 둬서 같다). 속성 이름은 응답 필드가 아니라 **엔티티 필드 이름**이다(소개는 `id`, `createdAt`, `updatedAt`, `content`, `user`라서 `sort=introId`는 없는 속성이다). 소개 목록은 `id`·`createdAt`·`updatedAt`·`content`만 받고 나머지는 500 `C004`다(7절).
 - **날짜**: `LocalDateTime` 필드는 Jackson 기본 직렬화로 `2025-07-27T21:08:37.109696`처럼 나간다(시간대 표시 없음, 소수점 이하는 0이 아닌 자리까지, 0이면 생략) **[추정: 설정 파일에 Jackson 설정이 없다]**. 예외로 `UserProfileResponse`의 `createdAt`·`updatedAt`은 문자열이고 형식이 `yyyy-MM-dd'T'HH:mm:ss`(초까지)다. 프론트의 생성 클라이언트는 날짜 필드를 `Date`로 받으므로 소수점 아래 자릿수는 화면에 영향이 없다 **[추정]**.
 - **없는 대상**: 글이 없으면 404 `P001`(`POST_NOT_FOUND`), 사용자가 없으면 404 `U001`(`USER_NOT_FOUND`). 둘 다 우리 `ErrorCode`에 이미 있다.
@@ -99,9 +99,9 @@ M5는 프론트가 쓰는 **읽기 API 17개**를 복원한 DB 위에서 옛 서
 
 ### 3.9 내 댓글·좋아요: `getMyComments`, `getMyLikes`, `isPostLiked`
 
-- `getMyComments`: 내가 쓴 댓글 전부(최상위와 답글 구분 없이). `CommentListResponse{commentId, content, createdAt, postId, postTitle}`. 메시지 "내가 단 댓글 목록 조회 성공".
-- `getMyLikes`: `LikeResponse{likeId, postId, title, contentSnippet(100자), writer, writerProfileImageUrl, thumbnailImageUrl, createdAt, tags}`. 정렬은 좋아요 시각 내림차순, 같으면 `likeId` 오름차순으로 고정. **태그가 없는 글의 `tags`는 `[null]`이 된다**(옛 코드가 태그 이름 목록을 만들 때 왼쪽 조인의 null을 걸러내지 않는다. 현재 데이터에서 태그 없는 글은 3개). 메시지 "좋아요 목록 조회 성공".
-- `isPostLiked`: 글이 없으면 404 `P001`, 있으면 내가 좋아요 했는지 boolean. 메시지 "좋아요 여부 조회 성공".
+- `getMyComments`: `GET /api/v1/comment/me/comments`(기본 크기 10). 내가 쓴 댓글 전부(최상위와 답글 구분 없이). `CommentListResponse{commentId, content, createdAt, postId, postTitle}`. 메시지 "내가 단 댓글 목록 조회 성공".
+- `getMyLikes`: `GET /api/v1/likes/me`(기본 크기 10). `LikeResponse{likeId, postId, title, contentSnippet(100자), writer, writerProfileImageUrl, thumbnailImageUrl, createdAt, tags}`. 정렬은 좋아요 시각 내림차순, 같으면 `likeId` 오름차순으로 고정이다(옛 `LikeQueryAdapter`가 두 쿼리 모두 `like.createdAt.desc(), like.id.asc()`를 적었다). 요청의 `sort`는 읽지 않는다. `createdAt`은 글이 아니라 좋아요를 누른 시각이다. 요약은 글 목록과 같은 규칙이다(`PostUtil.makeSnippet`이 안에서 이미지를 지운다). 같은 이름의 태그가 두 번 붙어도 이름은 한 번만 나온다(`distinct()`). **태그가 없는 글의 `tags`는 `[null]`이 된다**(옛 코드가 태그 이름 목록을 만들 때 왼쪽 조인의 null을 걸러내지 않는다. 현재 데이터에서 태그 없는 글은 3개). 메시지 "좋아요 목록 조회 성공".
+- `isPostLiked`: `GET /api/v1/likes/{postId}/liked`. 글이 없으면 404 `P001`, 있으면 내가 좋아요 했는지 boolean. 메시지 "좋아요 여부 조회 성공".
 
 ### 3.10 캐시
 
@@ -149,7 +149,7 @@ apps/server/src/
 1. **M5-1 공통 부품과 글 목록 4개**: `pageable.ts`, `local-date-time.ts`, 스니펫, `PostListResponse` 등 DTO를 실제 모듈로, `PostRepository`의 `fetchPosts`. 작업: `getPosts`, `getPostsByTag`, `searchPosts`, `getMyPosts`. 시험: 페이지 해석 규칙, 날짜 문자열, 스니펫, 태그 OR 필터, 대소문자와 `%`·`_` 검색, 정렬 고정, 총 개수, 접근 규칙, 계약.
 2. **M5-2 글 상세·인기·홈 피드·태그**: `getPostDetail`(댓글 트리 포함), `getWeeklyPopularPosts`(시각을 고정해 시험), `getHomeFeed`, `getAllTags`. **구현함(14절).**
 3. **M5-3 사용자와 소개**: `getCurrentUserProfile`, `getCurrentUserRole`, `getActivitySummary`, `getPublicProfileByNickname`, `getPendingUsers`, `getIntroList`. **구현함(15절).**
-4. **M5-4 내 댓글·좋아요**: `getMyComments`, `getMyLikes`(`tags: [null]` 포함), `isPostLiked`.
+4. **M5-4 내 댓글·좋아요**: `getMyComments`, `getMyLikes`(`tags: [null]` 포함), `isPostLiked`. **구현함(16절).**
 5. **M5-5 읽기 캐시**: Redis `cache:<이름>:<키>`, 만료 5·30·60분, 빈 결과는 저장 안 함(3.10). 무효화 연결은 M6.
 6. **M5-6 확인과 정리**: 계약 시험의 `TRIAL`을 계약 전체 비교로 넓히고, 복원 데이터 대조(읽기 전용), 이 문서와 `backend-plan.md` 정리.
 
@@ -161,6 +161,8 @@ apps/server/src/
 - 읽기 캐시를 옮기기 전(M5-1~M5-4)에는 쓰기 뒤에도 항상 최신 값이 나간다. 옛 서버는 최대 5분 낡은 값이 나갈 수 있었다. 쓰기가 없는 동안에는 차이를 볼 수 없다.
 - 인기 글이 현재 데이터에서는 항상 빈 목록이다(최근 7일 글이 없다).
 - 소개 목록의 `sort`는 `id`·`createdAt`·`updatedAt`·`content`만 받고 나머지는 500 `C004`다. 옛 서버는 연관 속성(`user`, `user.nickname`)과 `속성,방향,ignorecase`도 정렬했을 것이다. 프론트는 `createdAt,desc`만 쓴다. `sort` 값을 한 번 더 URL 디코딩하는 Spring의 동작(`UriUtils.decode`, 3.4.0 소스에 있다)과 `ignorecase`, 점만 있는 조각 걸러내기도 옮기지 않았다(`parseSort`의 `shortcut:` 주석).
+- 내 댓글 목록의 `sort`도 `id`·`createdAt`·`updatedAt`·`content`만 받고 나머지(`post`, `user` 같은 연관 이름 포함)는 500 `C004`다. 옛 서버는 연관 속성도 정렬했을 것이다. 요청의 `sort`는 `createdAt` 내림차순 뒤에 붙어서 같은 시각 안의 순서만 정한다(옛 동작 그대로, 개선 후보 24번).
+- 같은 시각의 마무리 순서는 목록마다 다르다. 좋아요 목록은 `likeId` 오름차순(옛 쿼리가 적었다), 글·소개·내 댓글은 id 내림차순(옛 쿼리가 정하지 않아 우리가 붙였다).
 
 ## 8. 미검증
 
@@ -168,7 +170,7 @@ apps/server/src/
 2. `postTags`와 `replies`의 정렬(옛은 지정이 없고 기본 키 순서로 짐작한다). 글 목록·상세의 태그는 `postTagId`, 답글은 `commentId` 오름차순으로 구현했다(M5-1·M5-2). 옛 서버의 실제 응답을 못 봐서 **[추정]**이 남는다(현재 데이터에는 답글이 0개, 태그 순서는 연결한 순서와 같을 것으로 본다).
 3. 옛 응답의 날짜가 실제로 마이크로초까지 나갔는지. 운영 응답을 못 봐서 확인할 수 없고, 프론트가 `Date`로 파싱하므로 영향이 없다고 본다.
 4. 옛 운영에서 캐시가 실제로 동작했는지(설정상 Redis는 연결되어 있다). 운영 응답이 낡았는지는 못 봤다.
-5. ~~`sort` 문법(`property,dir`)에서 틀린 값을 만났을 때 Spring이 하는 일의 세부~~ 문법은 Spring Data 소스로 확인했다(3.1). 소개 목록에는 `id`·`createdAt`·`updatedAt`·`content`만 허용하고 그 밖은 500 `C004`로 둔다. 옛 서버의 실제 응답은 못 봐서 500인지는 **[추정]**이다. 내 댓글(M5-4)은 "메서드 이름의 정렬에 덧붙는다"가 달라서 그때 따로 확인한다.
+5. ~~`sort` 문법(`property,dir`)에서 틀린 값을 만났을 때 Spring이 하는 일의 세부~~ 문법은 Spring Data 소스로 확인했다(3.1). 소개 목록에는 `id`·`createdAt`·`updatedAt`·`content`만 허용하고 그 밖은 500 `C004`로 둔다. 옛 서버의 실제 응답은 못 봐서 500인지는 **[추정]**이다. 내 댓글은 "메서드 이름의 정렬 뒤에 붙는다"가 달라서 M5-4에서 Spring Data 3.4.0 소스로 확인했다(16절).
 6. 한글 태그를 경로에 넣을 때(`/posts/tags/{tagName}`)의 인코딩. 시험에 한글 태그를 넣는다.
 
 ## 9. 개선 후보 (구현하지 않는다)
@@ -213,7 +215,7 @@ UPDATE posts          SET content           = REPLACE(content, @old, @new)      
 
 ## 12. 사용자가 할 일
 
-1. M4-3의 마지막 확인: 서버를 띄워 GitHub로 로그인해서 본인 계정이 새 사용자로 만들어지지 않고 role을 유지하는지 본다(`yarn dev:local`, `http://localhost:3000/oauth2/authorization/github`). 끝나면 알려 주면 회원 수 합계로 확인한다.
+1. ~~M4-3의 마지막 확인~~ 2026-11-23에 했다. 본인이 `http://localhost:3000/oauth2/authorization/github`로 GitHub 로그인을 했고, 회원 수가 15 그대로라서 새 사용자가 만들어지지 않았다(합계만 조회했다). role 유지는 본인이 화면에서 확인했다.
 2. 백업의 두 번째 사본을 만든다(10절).
 3. D4(읽기 캐시를 옮긴다)에 이의가 있으면 알려 준다. 없으면 이대로 간다.
 
@@ -294,4 +296,36 @@ UPDATE posts          SET content           = REPLACE(content, @old, @new)      
 
 **알려진 차이**: 소개 목록의 `sort`는 `id`·`createdAt`·`updatedAt`·`content`만 받고 나머지는 500 `C004`다(옛 서버는 `user.nickname` 같은 연관 정렬과 `ignorecase`도 받았을 것이다). `sort` 값의 이중 URL 디코딩은 옮기지 않았다. 승인 대기 목록의 정렬(32번)과 좋아요 수의 행 수 세기(33번)는 옛 동작대로 옮겼다. 날짜의 소수점 아래 넷째 자리부터가 잘린다(D3). 현재 데이터에 소개는 1건, PENDING은 0명이다.
 
-**남은 것**: M5-4(내 댓글, 내 좋아요, `isPostLiked`). 옛 `userProfile`·`introsList`·`publicProfileAggregate` 캐시와 `userProfile`의 무효화는 M5-5와 M6에서 맞춘다. 전체 계약 비교와 복원 데이터 대조는 M5-6이다.
+**남은 것**: M5-4(16절에서 구현함). 옛 `userProfile`·`introsList`·`publicProfileAggregate` 캐시와 `userProfile`의 무효화는 M5-5와 M6에서 맞춘다. 전체 계약 비교와 복원 데이터 대조는 M5-6이다.
+
+## 16. M5-4 구현 결과 [확인함]
+
+**만든 것**: `modules/comment/`(`GET /api/v1/comment/me/comments`: `comment.controller.ts`, `comment.service.ts`, `comment.repository.ts`, `comment.module.ts`)와 `modules/like/`(`GET /api/v1/likes/me`, `GET /api/v1/likes/{postId}/liked`: `like.controller.ts`, `like.service.ts`, `like.repository.ts`, `like.module.ts`, `dto/like-response.dto.ts`). 옛 `domain/comment`와 `domain/like`가 각각 컨트롤러·서비스·저장소를 따로 가져서 같은 구조로 두 모듈을 만들고 `AppModule`에 등록했다. 계약 시험은 `TRIAL.operations`에 `getMyLikes`와 `isPostLiked`를 더했고, `getMyComments`는 가짜 컨트롤러를 지우고 실제 컨트롤러로 바꿨다. 앱 조립 시험(`app.module.spec.ts`)에는 새 컨트롤러 2개의 등록 단언을 더했다.
+
+**구조에서 정한 것**: `LikeRepository`는 `post` 테이블에서 글과 내 좋아요를 한 번에 읽는다(옛 코드는 글을 찾고 좋아요 행을 따로 확인했다). 글 모듈을 가져오지 않는다(다른 모듈의 저장소를 부르지 않는 원칙, 4절). 요약 문장은 글 모듈의 `makeContentSnippet` 함수를 가져다 쓴다(옛 `PostUtil.makeSnippet`이 안에서 이미지를 지우므로 글 목록과 같은 규칙이다).
+
+**확인한 방법과 결과**
+
+1. 게이트 4개: `lint`, `typecheck`, `test`(41개 파일 814개 통과, 건너뜀 0개. 이전 35개 710개), `build` 통과. 전체 `yarn test`를 10번 반복해 0번 실패했다(매번 814개 통과). 이번 변경 파일의 서식 검사도 통과했다(전체 검사의 경고 21개는 git이 무시하는 Prisma 생성 코드다).
+2. 진짜 MySQL 8.4.13으로 하는 저장소 시험: 좋아요(정렬 두 가지, 내 것만, 쪽 나누기와 범위 밖 쪽의 실제 개수, 중복 좋아요 행, 태그의 순서·중복·`[null]`, 썸네일, 글쓴이 값, 글 없음·안 누름·누름·남의 좋아요·다른 글·중복 행의 `isPostLikedBy`)와 댓글(내 것만과 답글 포함, 기본 정렬과 같은 시각 마무리, 요청 `sort`가 같은 시각 안에서만 작동함, 허용 목록 밖 10개 이름의 500 `C004`, 쪽 나누기와 범위 밖 쪽).
+3. 서비스·컨트롤러 시험(서비스·저장소·토큰 저장소는 가짜): 응답 변환(날짜 문자열, 요약, `[null]` 그대로), 총 쪽수, 404 `P001`, 경로의 글 번호(16진수·공백, 잘못된 값의 400 `C005`), `false`가 `data`에 남는 것, 접근 규칙(토큰 없음 403 `J004`, PENDING·PRE_REGISTER 403 `J005`), 좋아요 목록은 `sort`를 읽지 않고 댓글 목록은 읽어 넘기는 것.
+4. 계약 시험이 세 작업의 경로·쿼리·응답 모델을 프론트 계약과 비교해 통과하고, 접근 규칙 시험이 실제 `AppModule`의 새 라우트를 옛 접근 규칙 표와 비교해 통과한다.
+5. 변이 시험 62개(정렬 기준·방향·마무리, 허용 목록과 이름 짝, 사용자 필터, 쪽·개수, 태그·썸네일·프로필 값, 응답 변환, 메시지·경로·기본 크기, 명세 모양, 모듈 등록)를 돌려 61개를 시험이 잡았고, 원본은 해시로 복원을 확인했다. 살아남은 1개는 좋아요 목록에서 같은 시각의 `likeId` 오름차순 마무리를 지운 변이다. 이 시험 데이터로는 구분되지 않았다 **[추정: MySQL이 같은 값을 기본 키 순서로 돌려준 것으로 보인다. `ORDER BY ... LIMIT`의 정렬은 같은 값끼리의 순서가 보장되지 않아서 데이터가 많으면 달라질 수 있다]**. 옛 쿼리가 적은 정렬이라 그대로 두고, 이 변이는 알려진 한계로 남긴다.
+6. 시험이 개발 DB에 남긴 것이 없다: 전체 시험 전후의 합계가 같다(users 15, posts 58, tags 45, post_tags 76, post_images 129, comments 35, likes 83, introductions 1, profile_images 15, repository 5).
+7. M4-3의 로그인 확인(12절 1번)을 끝냈다.
+
+**알게 된 함정**
+
+1. **좋아요 목록의 같은 시각 마무리는 `likeId` 오름차순이다.** 글 목록·소개·내 댓글에 붙인 마무리(id 내림차순)와 반대다. 옛 `LikeQueryAdapter`가 두 쿼리 모두 `like.createdAt.desc(), like.id.asc()`를 직접 적었다.
+2. **내 댓글의 요청 `sort`는 기본 정렬을 바꾸지 못한다.** 메서드 이름의 `createdAt` 내림차순이 먼저이고 요청의 `sort`가 뒤에 붙는다(Spring Data Commons 3.4.0 `tree.getSort().and(dynamicSort)`, JPA 3.4.0의 `getDynamicSort`로 확인). `sort=content,asc`를 보내도 단 시각 순서는 그대로이고 같은 시각 안에서만 `content`가 순서를 정한다. 소개 목록(요청의 `sort`가 기본 정렬을 바꾼다)과 다르다. 개선 후보 24번에 적었다.
+3. **두 목록 모두 범위를 넘긴 쪽도 실제 전체 개수를 센다.** 글 목록의 "빈 쪽이면 0"과 다르다. 내 댓글은 Spring Data의 `PageableExecutionUtils.getPage`(3.4.0 소스)가 빈 쪽이면 개수 쿼리를 실행하고, 좋아요는 어댑터가 항상 `count`를 센다.
+4. **좋아요 목록은 `sort`를 읽지 않는다.** 명세에는 `sort`가 있지만 어댑터가 `pageable`의 정렬을 쓰지 않는다(캐시 키에만 들어간다). 이상한 값도 오류가 아니다.
+5. **태그는 이름 기준으로 중복이 없고, 하나도 없으면 `[null]`이다.** 글 목록은 같은 태그가 두 번 붙으면 두 번 나오지만 좋아요 목록은 `distinct()`라 한 번만 나온다. 태그 순서는 옛 쿼리가 정하지 않아 `postTagId` 순서로 두었다 **[추정]**.
+6. **같은 사용자의 좋아요 행이 여럿이면(유일 제약 없음) 목록에 모두 나오고 총 개수도 행 수다.** `isPostLiked`는 하나라도 있으면 `true`다(33번).
+7. **`isPostLiked`의 `false`는 `data`에서 빠지지 않는다.** `ResponseDto`는 `null`일 때만 `data`를 뺀다.
+8. **`GET me/comments`는 M6의 `GET :postId/comments`보다 먼저 선언해야 한다.** Express는 선언한 순서대로 맞춰 보지만 Spring은 글자 그대로인 경로를 먼저 고른다. 컨트롤러 주석에 적었다.
+9. **같은 시각의 순서는 DB가 자연스럽게 맞춰 줘서 시험이 약해지기 쉽다.** 정렬 시험의 데이터는 좋아요 시각, 글 작성 시각, 좋아요 번호가 서로 다른 순서가 되게 만들었고, 같은 시각 시험은 만든 순서와 글 번호의 순서가 어긋나게 만들었다.
+
+**알려진 차이**: 내 댓글 목록의 `sort`는 `id`·`createdAt`·`updatedAt`·`content`만 받고 나머지는 500 `C004`다(옛 서버는 연관 속성도 받았을 것이다). 날짜의 소수점 아래 넷째 자리부터가 잘린다(D3). 현재 데이터에서 태그 없는 글은 3개라서, 그 글을 좋아요 한 사용자의 목록은 `tags`가 `[null]`로 나간다.
+
+**남은 것**: M5-5(읽기 캐시). 옛 `myLikes`의 키는 `사용자 id-쪽 번호-쪽 크기-정렬 문자열`이고 좋아요 추가·취소가 `myLikes` 전체를 지운다(무효화는 M6). 내 댓글 목록에는 옛 서버에 캐시가 없었다 **[확인함: 코드]**. 전체 계약 비교와 복원 데이터 대조는 M5-6이다.

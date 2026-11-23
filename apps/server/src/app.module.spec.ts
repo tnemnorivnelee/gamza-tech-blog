@@ -7,7 +7,9 @@ import { JwtTokenService } from './modules/auth/jwt-token.service.js';
 import { RedisTokenStore } from './modules/auth/redis-token-store.js';
 import { TokenStore } from './modules/auth/token-store.js';
 import { PrismaUserRepository } from './modules/user/prisma-user.repository.js';
+import { CommentController } from './modules/comment/comment.controller.js';
 import { IntroController } from './modules/introduction/intro.controller.js';
+import { LikeController } from './modules/like/like.controller.js';
 import { PostController } from './modules/post/post.controller.js';
 import { TagController } from './modules/tag/tag.controller.js';
 import { AdminUserController } from './modules/user/admin-user.controller.js';
@@ -37,6 +39,8 @@ describe('AppModule', () => {
     expect(moduleRef.get(AdminUserController)).toBeInstanceOf(
       AdminUserController,
     );
+    expect(moduleRef.get(CommentController)).toBeInstanceOf(CommentController);
+    expect(moduleRef.get(LikeController)).toBeInstanceOf(LikeController);
     // 연결은 첫 명령을 보낼 때 열린다(lazyConnect). 그래서 이 시험은 Redis 없이도 끝나고, 앱을 닫으면 연결 객체도 끝난다.
     const redis = moduleRef.get(Redis);
     expect(redis.status).toBe('wait');
