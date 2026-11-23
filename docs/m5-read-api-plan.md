@@ -1,8 +1,8 @@
 # M5 읽기 API 계획
 
-작성일 2026-11-10 · 상태: M5-1(13절)·M5-2(14절)·M5-3(15절)·M5-4(16절)·M5-5(17절) 구현됨, M5-6 대기 · 이슈 #46, #48, #50, #52, #54 · 관련: `backend-plan.md` 5·7·11절, `m4-prisma-plan.md`, `improvement-candidates.md` 22~27번과 34번, `porting-principle.md`
+작성일 2026-11-10 · 상태: M5-1(13절)·M5-2(14절)·M5-3(15절)·M5-4(16절)·M5-5(17절)·M5-6(18절) 구현됨, M5 끝 · 이슈 #46, #48, #50, #52, #54, #56 · 관련: `backend-plan.md` 5·7·11절, `m4-prisma-plan.md`, `improvement-candidates.md` 22~27번과 34번, `porting-principle.md`
 
-확인 기준: 옛 백엔드 `potato-club/GamzaTechBlog-back`의 `master`와 프론트 `potato-club/GamzaTechBlog-front`는 읽기만 했다(코드를 실행하지 않았다). 복원한 로컬 DB는 합계만 조회했다(개인정보 행은 보지 않았다). Spring 동작은 공식 문서와 Spring Data 소스로 확인했다. 표시: **[확인함]** 코드·문서에서 직접 확인, **[추정]** 자료로 짐작함, **[미검증]** 아직 확인할 방법이 없음. 운영 중이던 서버의 실제 응답은 못 봤으므로 "옛 동작"은 `master` 코드 기준이다.
+확인 기준: 옛 백엔드 `potato-club/GamzaTechBlog-back`의 `master`와 프론트 `potato-club/GamzaTechBlog-front`는 읽기만 했다(코드를 실행하지 않았다). 복원한 로컬 DB는 합계만 조회했다(개인정보 행은 보지 않았다. 다만 M5-6의 서버 확인 스크립트는 사용자 행의 githubId·닉네임·role을 읽어 토큰을 만들고 DB 값과 대조했고, 그 값은 출력하지도 저장하지도 않았다). Spring 동작은 공식 문서와 Spring Data 소스로 확인했다. 표시: **[확인함]** 코드·문서에서 직접 확인, **[추정]** 자료로 짐작함, **[미검증]** 아직 확인할 방법이 없음. 운영 중이던 서버의 실제 응답은 못 봤으므로 "옛 동작"은 `master` 코드 기준이다.
 
 ## 1. 한눈에 보기
 
@@ -166,7 +166,7 @@ apps/server/src/
 3. **M5-3 사용자와 소개**: `getCurrentUserProfile`, `getCurrentUserRole`, `getActivitySummary`, `getPublicProfileByNickname`, `getPendingUsers`, `getIntroList`. **구현함(15절).**
 4. **M5-4 내 댓글·좋아요**: `getMyComments`, `getMyLikes`(`tags: [null]` 포함), `isPostLiked`. **구현함(16절).**
 5. **M5-5 읽기 캐시**: Redis `cache:<이름>:<키>`, 만료 5·30·60분, 목록마다 다른 `unless`(3.10). 무효화 연결은 M6. **구현함(17절).**
-6. **M5-6 확인과 정리**: 계약 시험의 `TRIAL`을 계약 전체 비교로 넓히고, 복원 데이터 대조(읽기 전용), 이 문서와 `backend-plan.md` 정리.
+6. **M5-6 확인과 정리**: 읽기 17개가 모두 계약 시험(`TRIAL`)에 들어 있는지 점검하고, 서버를 띄워 17개를 진짜 DB·Redis로 호출해 복원 데이터와 대조(읽기 전용), 이 문서와 `backend-plan.md` 정리. **구현함(18절).** (처음에는 "`TRIAL`을 계약 전체 비교로 넓히기"라고 적었다. 쓰기(M6)와 챗봇(M7)이 아직 없어 계약 48개 중 22개만 비교할 수 있으므로 전체 비교는 M8로 정정했다.)
 
 선행 없이 시작할 수 있다. 사용자의 허락이 필요한 일은 없다(진짜 DB 시험은 M4-2에서 이미 허락받은 방식이다).
 
@@ -188,7 +188,8 @@ apps/server/src/
 3. 옛 응답의 날짜가 실제로 마이크로초까지 나갔는지. 운영 응답을 못 봐서 확인할 수 없고, 프론트가 `Date`로 파싱하므로 영향이 없다고 본다.
 4. 옛 운영에서 캐시가 실제로 동작했는지(설정상 Redis는 연결되어 있다). 운영 응답이 낡았는지는 못 봤다.
 5. ~~`sort` 문법(`property,dir`)에서 틀린 값을 만났을 때 Spring이 하는 일의 세부~~ 문법은 Spring Data 소스로 확인했다(3.1). 소개 목록에는 `id`·`createdAt`·`updatedAt`·`content`만 허용하고 그 밖은 500 `C004`로 둔다. 옛 서버의 실제 응답은 못 봐서 500인지는 **[추정]**이다. 내 댓글은 "메서드 이름의 정렬 뒤에 붙는다"가 달라서 M5-4에서 Spring Data 3.4.0 소스로 확인했다(16절).
-6. 한글 태그를 경로에 넣을 때(`/posts/tags/{tagName}`)의 인코딩. 시험에 한글 태그를 넣는다.
+6. ~~한글 태그를 경로에 넣을 때(`/posts/tags/{tagName}`)의 인코딩~~ M5-6에서 확인함(18절): 복원 데이터의 한글 태그 22개를 포함해 태그 45개를 모두 불러 DB와 맞았다.
+7. M5-6 확인에서도 못 본 것(18절): 비어 있지 않은 인기 글과 승인 대기 목록(현재 데이터에 둘 다 0개), 답글이 있는 댓글 트리(답글 0개), 한글 닉네임의 공개 프로필 경로(닉네임이 모두 영문), 옛 서버의 실제 응답과의 비교.
 
 ## 9. 개선 후보 (구현하지 않는다)
 
@@ -377,3 +378,28 @@ UPDATE posts          SET content           = REPLACE(content, @old, @new)      
 **알려진 차이**: 7절에 적었다(값 형식, 키 단순화, 무효화 없음). 요약하면 값은 `@class` 없는 보통 JSON이고, 사용자 id 대신 githubId를 키에 쓰며, `myLikes` 키에서 정렬을 뺐고, 태그 없음과 빈 목록을 `all` 하나로 합쳤다. 응답은 옛 서버와 같다.
 
 **남은 것**: M5-6(계약 시험을 전체 비교로 넓히기, 복원 데이터 대조, 이 문서와 `backend-plan.md` 정리). 서버를 실제로 띄워 진짜 Redis·진짜 DB 위에서 17개 API를 부르는 확인도 M5-6에서 한다(지금까지의 서비스 시험은 가짜 저장소, 저장소 시험은 진짜 MySQL, 캐시 시험은 진짜 Redis로 따로 본 것이다). 무효화(`@CacheEvict`)는 쓰기를 옮기는 M6에서 연결한다. 옛 무효화는 대부분 `allEntries`(이름 전체 삭제)라서 `cache:<이름>:*`를 찾아 지워야 하고, 이때 `KEYS` 대신 `SCAN`을 쓴다 **[제안]**. `homeFeed`와 `publicProfileAggregate`는 옛 서버에도 무효화가 없다(3.10).
+
+## 18. M5-6 구현 결과 [확인함]
+
+**한 일**: 코드는 바꾸지 않았다(서버 쪽에서 고칠 것이 나오지 않았다). 읽기 17개가 계약 시험에 모두 들어 있는지 점검하고, 서버를 실제로 띄워 진짜 MySQL·Redis 위에서 17개를 불러 복원 데이터와 대조했고, 문서(6·8절, `backend-plan.md`)를 정리했다. 확인 스크립트는 저장소에 넣지 않았다(이유는 아래 6번).
+
+**확인한 방법과 결과**
+
+1. **계약 시험 점검**: 읽기 17개(공개 9, 로그인 7, 관리자 1)가 모두 `TRIAL`에 들어 있고 실제 컨트롤러로 비교된다. 가짜 컨트롤러는 쓰기 3개(`addComment`, `deleteComment`, 관리자 `delete`)만 남았다. 계약 48개 중 비교하는 것은 22개이고 나머지 26개는 쓰기(M6), 챗봇(M7), 1차 범위 밖 읽기 5개, `lookup`이라 아직 없다. 그래서 "계약 전체 비교"는 M8로 정정했다(6절).
+2. **서버를 띄워 17개를 불렀다**: `yarn build` 뒤 `node dist/main`을 띄우고 개발 MySQL·Redis에 연결했다. 로그인이 필요한 호출은 개발용 JWT 비밀값으로 로컬에서 서명한 토큰(사용자마다 하나, USER·ADMIN 14명)으로 불렀다. 토큰과 비밀값은 출력하지 않았다. 기대값은 서버 코드가 아니라 따로 쓴 SQL로 구했다.
+   - 공개 9개: `getPosts` totalElements와 글 id 집합이 `posts`(58)와 같고 기본 크기 10, 최신순이다. `getAllTags`는 `tags`(45)와 이름 집합이 같다. `getPostsByTag`는 태그 45개(한글 22개 포함) 모두 totalElements가 DB와 같고, 없는 태그는 200과 빈 쪽이다. `searchPosts`는 `LIKE` 결과 수와 같고 `%`를 글자 그대로 찾는다. `getWeeklyPopularPosts`는 최근 7일 글 수(0)와 같다. `getHomeFeed`의 최신 글·태그·인기 글이 위 값과 같다. `getPostDetail`은 글 58개 모두 댓글 수·좋아요 수·태그·제목이 DB와 같고 댓글 합계가 35(`comments` 행 수)다. 없는 글은 404 `P001`, 숫자가 아니면 400 `C005`다. `getIntroList`는 `introductions`(1)와 같다. `getPublicProfileByNickname`은 15명 모두 활동 수·글 수가 DB와 같고 없는 닉네임은 404 `U001`이다.
+   - 로그인 7개(14명 각자): `getCurrentUserProfile`의 githubId·닉네임·role, `getCurrentUserRole`, `getActivitySummary`의 세 수, `getMyPosts`·`getMyLikes`·`getMyComments`의 totalElements와 content 길이가 모두 DB와 같다. `isPostLiked`는 누른 글에 `true`, 안 누른 글에 `false`, 없는 글에 404 `P001`이다.
+   - 관리자 1개와 접근 규칙: `getPendingUsers`가 관리자에게 200(승인 대기 0명과 같음)이고 일반 사용자·토큰 없음·잘못된 토큰은 거부한다. `PRE_REGISTER` 사용자는 `getCurrentUserRole`은 200이고 `getMyPosts`는 거부된다.
+3. **캐시**: 캐시가 비어 있을 때 프록시 경계를 먼저 확인했다. 홈 피드는 `homeFeed`와 `allTags`만 만들고(`postsList`·`hotPosts` 없음), 공개 프로필은 `publicProfileAggregate`만 만든다(`myPosts` 없음). 전체를 부른 뒤 만들어진 캐시 이름은 11개로 기대와 같다(`hotPosts`는 인기 글이 비어 저장하지 않아서 없다). 이름별 남은 수명이 기대 범위(5분, `allTags` 60분 안쪽)이고, 키 모양은 `cache:postsList:0-10-all`, `cache:homeFeed:0-100-all`, `cache:allTags:all`, `cache:introsList:p:0:s:100:sort:createdAt: DESC`다. 성공한 234건을 한 번씩 더 불렀을 때 응답이 첫 번째와 같았다(`timestamp` 제외). `cache:allTags:all`의 값을 바꿔 두자 응답이 따라 바뀌어 적중이 DB가 아니라 Redis에서 나옴을 확인했다.
+4. **읽기 전용인지**: 정적으로는 운영 코드의 쓰기(`create`, `$executeRaw`)가 GitHub 로그인 서비스에만, 토큰 저장소 쓰기가 재발급·로그아웃에만 있어 17개 경로가 닿지 않는다. 동적으로는 호출 전후로 10개 표의 행 수와 `CHECKSUM TABLE`이 같고(UPDATE도 없었다), Redis의 `cache:*` 키 집합과 전체 키 수(2개, 로그인 토큰)가 같다. 이번 실행이 만든 `cache:*` 키 160개는 만든 것만 지웠다.
+5. 서버는 확인이 끝난 뒤 종료했고(남은 프로세스 없음) 서버 로그에 오류가 없었다.
+6. **스크립트를 저장소에 넣지 않은 이유**: 복원 데이터의 숫자(58, 45, 35 ...)에 기대고 있어 데이터가 없는 CI에서는 실패한다. `AGENTS.md`는 진짜 DB를 쓰는 시험을 `*.repository.spec.ts`로 한정한다. 이 확인은 복원 데이터가 바뀌면 다시 해야 하는 일회성 점검이다.
+
+**알게 된 함정**
+
+1. **응답마다 `timestamp`가 다르다.** 응답 본문 전체를 비교하면 항상 달라진다. 캐시 적중과 미적중을 비교할 때는 `timestamp`를 빼야 한다.
+2. **서버가 떴는지 보려고 캐시가 걸린 경로를 부르면 캐시가 미리 생긴다.** 처음에 `/api/v1/tags`로 확인해서 `allTags`가 먼저 만들어졌고, 그 뒤 홈 피드가 만든 `allTags`가 새 키로 보이지 않아 프록시 경계 확인이 실패로 나왔다(서버 쪽 문제가 아니라 확인 순서의 문제였다). 준비 확인은 캐시를 쓰지 않는 `/v3/api-docs/all`로 한다.
+
+**못 본 것**: 현재 데이터에 인기 글(최근 7일 글)과 승인 대기 사용자가 없어서 `getWeeklyPopularPosts`와 `getPendingUsers`는 "빈 경우"만 확인했다. 답글이 0개라 댓글 트리의 깊이는 단위·저장소 시험으로만 본다. 닉네임이 모두 영문이라 한글 닉네임의 공개 프로필 경로는 서버 호출로는 못 봤다. 로그인은 토큰을 직접 서명해 가드를 통과시켰고, 실제 GitHub 로그인 흐름은 M4-3에서 따로 확인했다. 옛 서버의 실제 응답과의 비교는 옛 서버가 없어서 할 수 없다. 한 번의 순차 실행이라 동시 요청 상황은 보지 않았다.
+
+**남은 것**: M6(쓰기 API와 캐시 무효화). M8에서 계약 전체 비교와 프론트 전환.
