@@ -29,8 +29,8 @@ import { UserService } from '../../src/modules/user/user.service.js';
 
 const int64 = { type: 'integer', format: 'int64' } as const;
 
-// 계약 시험용 가짜 컨트롤러. 옛 CommentController와 AdmissionController의 일부를 흉내 낸다.
-// 실제 컨트롤러가 생기면 이 파일을 지우고 실제 모듈로 시험한다.
+// 계약 시험용 가짜 컨트롤러. 아직 옮기지 않은 쓰기 작업(댓글 등록·삭제)과 합격 결과 삭제를 흉내 낸다.
+// 실제 컨트롤러가 생기면 해당 작업을 지우고 실제 컨트롤러로 시험한다.
 @Controller('api/v1/comment')
 class FakeCommentController {
   @ApiOperation({ summary: '게시물에 댓글 등록' })

@@ -132,8 +132,8 @@
 - 개선안: null을 걸러서 `[]`로 낸다. 프론트가 `tags`를 문자열 배열로 가정하면 오류가 날 수 있는 모양이다.
 
 ### 24. 정렬 파라미터를 받는 목록이 요청의 `sort`를 무시하거나 반영하는 곳이 섞여 있다
-- 옛 동작: 글 목록·태그별·검색·내 글·공개 프로필의 글·좋아요 목록은 쿼리에 `createdAt` 내림차순이 박혀 있어서 요청의 `sort`를 무시한다. 소개 목록과 내 댓글 목록은 `sort`를 반영하고, 없는 속성이면 500이 된다. 명세에는 모두 `sort` 파라미터가 있다. **[확인함: 코드]**
-- 1차: 옛 동작대로 옮긴다(`m5-read-api-plan.md` 3.1). 소개 목록은 `id`·`createdAt`·`updatedAt`·`content`만 허용하고 나머지는 500이다(`common/pageable.ts`의 `parseSort`, `modules/introduction/intro.repository.ts`). 옛 속성 이름은 응답 이름이 아니라 엔티티 필드 이름이라 `sort=introId`도 500이다.
+- 옛 동작: 글 목록·태그별·검색·내 글·공개 프로필의 글·좋아요 목록은 쿼리에 `createdAt` 내림차순이 박혀 있어서 요청의 `sort`를 무시한다. 소개 목록과 내 댓글 목록은 `sort`를 반영하고, 없는 속성이면 500이 된다. 내 댓글 목록은 메서드 이름의 `createdAt` 내림차순이 먼저라서 요청의 `sort`가 같은 시각 안의 순서만 정한다(Spring Data 3.4.0 소스로 확인). 명세에는 모두 `sort` 파라미터가 있다. **[확인함: 코드]**
+- 1차: 옛 동작대로 옮긴다(`m5-read-api-plan.md` 3.1). 소개 목록은 `id`·`createdAt`·`updatedAt`·`content`만 허용하고 나머지는 500이다(`common/pageable.ts`의 `parseSort`, `modules/introduction/intro.repository.ts`). 내 댓글 목록도 같은 네 개만 허용한다(`modules/comment/comment.repository.ts`). 옛 속성 이름은 응답 이름이 아니라 엔티티 필드 이름이라 `sort=introId`도 500이다.
 - 개선안: 쓰는 곳이 정렬을 못 바꾼다면 명세에서 `sort`를 빼고, 지원하는 정렬은 허용 목록으로 검사해서 틀리면 400으로 응답한다.
 
 ### 25. 읽기 캐시가 시간 만료에 기대고, 인기 글은 최근 7일 글만 대상이다
@@ -177,6 +177,6 @@
 - 개선안: 정렬을 코드에 명시하고(오래 기다린 사람이 위), 필요하면 쪽 나누기를 더한다.
 
 ### 33. 활동 요약의 좋아요 수가 행 수라서 중복 행이 있으면 부풀려진다
-- 옛 동작: `getActivitySummary`의 `likedPostCount`는 `likes` 행 수(`countByUser`)다. `likes` 테이블에는 `(user_id, post_id)` 유일 제약이 없어서, 같은 글에 좋아요가 두 번 들어가 있으면 "좋아요 한 게시물 수"가 2가 된다. 현재 복원 데이터에 중복 행이 있는지는 확인하지 않았다. **[확인함: 코드와 스키마]**
+- 옛 동작: `getActivitySummary`의 `likedPostCount`는 `likes` 행 수(`countByUser`)다. `likes` 테이블에는 `(user_id, post_id)` 유일 제약이 없어서, 같은 글에 좋아요가 두 번 들어가 있으면 "좋아요 한 게시물 수"가 2가 된다. 좋아요 목록(`getMyLikes`)도 중복 행을 각각 내보내고 총 개수가 행 수이며, `isPostLiked`는 행이 하나라도 있으면 `true`다. 현재 복원 데이터에 중복 행이 있는지는 확인하지 않았다. **[확인함: 코드와 스키마]**
 - 1차: 옛 동작대로 행을 센다(시험으로 고정).
 - 개선안: `(user_id, post_id)` 유일 제약을 더하고(쓰기 M6에서 중복 방지와 함께), 개수를 글 기준(`count(distinct post_id)`)으로 센다. 기존 중복 행 정리가 먼저다.
