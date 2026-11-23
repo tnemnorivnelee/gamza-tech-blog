@@ -1,24 +1,24 @@
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Param, Post } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiBody, ApiOperation, ApiParam } from '@nestjs/swagger';
 import { Test } from '@nestjs/testing';
-import { PagedResponse } from '../../src/common/dto/paged-response.dto.js';
 import { ResponseDto } from '../../src/common/dto/response.dto.js';
 import {
-  ApiPageable,
   OkOf,
-  OkPagedOf,
   OkString,
   OkVoid,
 } from '../../src/common/swagger/api-decorators.js';
 import { setupSwagger } from '../../src/common/swagger/setup-swagger.js';
 import { AuthController } from '../../src/modules/auth/auth.controller.js';
 import { AuthService } from '../../src/modules/auth/auth.service.js';
-import { CommentListResponse } from '../../src/modules/comment/dto/comment-list-response.dto.js';
+import { CommentController } from '../../src/modules/comment/comment.controller.js';
+import { CommentService } from '../../src/modules/comment/comment.service.js';
 import { CommentRequest } from '../../src/modules/comment/dto/comment-request.dto.js';
 import { CommentResponse } from '../../src/modules/comment/dto/comment-response.dto.js';
 import { IntroController } from '../../src/modules/introduction/intro.controller.js';
 import { IntroService } from '../../src/modules/introduction/intro.service.js';
+import { LikeController } from '../../src/modules/like/like.controller.js';
+import { LikeService } from '../../src/modules/like/like.service.js';
 import { PostController } from '../../src/modules/post/post.controller.js';
 import { PostService } from '../../src/modules/post/post.service.js';
 import { TagController } from '../../src/modules/tag/tag.controller.js';
@@ -53,17 +53,6 @@ class FakeCommentController {
   deleteComment() {
     return ResponseDto.of('댓글이 삭제되었습니다.');
   }
-
-  @ApiOperation({ summary: '내가 단 댓글 목록 조회' })
-  @Get('me/comments')
-  @ApiPageable()
-  @OkPagedOf(CommentListResponse)
-  getMyComments() {
-    return ResponseDto.of(
-      '내가 단 댓글 목록 조회 성공',
-      new PagedResponse<CommentListResponse>([], 0, 20, 0, 0),
-    );
-  }
 }
 
 @Controller('api/admissions')
@@ -78,7 +67,7 @@ class FakeAdmissionController {
   }
 }
 
-// 인증·글·태그·소개·사용자 컨트롤러는 실제 클래스를 쓴다. 명세는 데코레이터만으로 만들어지므로 의존하는 부품은 빈 가짜로 채운다.
+// 인증·글·태그·소개·사용자·내 댓글·좋아요 컨트롤러는 실제 클래스를 쓴다. 명세는 데코레이터만으로 만들어지므로 의존하는 부품은 빈 가짜로 채운다.
 // AuthModule을 통째로 넣으면 전역 가드가 따라와서 위 가짜 컨트롤러의 응답 시험이 로그인을 요구하게 된다.
 export async function createFakeApp() {
   const moduleRef = await Test.createTestingModule({
@@ -91,6 +80,8 @@ export async function createFakeApp() {
       IntroController,
       UserController,
       AdminUserController,
+      CommentController,
+      LikeController,
     ],
     providers: [
       { provide: AuthService, useValue: {} },
@@ -98,6 +89,8 @@ export async function createFakeApp() {
       { provide: TagService, useValue: {} },
       { provide: IntroService, useValue: {} },
       { provide: UserService, useValue: {} },
+      { provide: CommentService, useValue: {} },
+      { provide: LikeService, useValue: {} },
       { provide: ConfigService, useValue: {} },
     ],
   }).compile();

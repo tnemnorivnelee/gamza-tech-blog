@@ -15,7 +15,7 @@ const contract = JSON.parse(
   ),
 ) as Contract;
 
-// 시험 단계에서는 가짜 컨트롤러가 흉내 내는 작업과 실제로 옮긴 작업(reissue, logout, 글 목록 4개, 글 상세·인기·홈 피드·태그, 사용자·소개 6개)만 비교한다.
+// 시험 단계에서는 가짜 컨트롤러가 흉내 내는 작업과 실제로 옮긴 작업(reissue, logout, 글 목록 4개, 글 상세·인기·홈 피드·태그, 사용자·소개 6개, 내 댓글·좋아요 3개)만 비교한다.
 // 실제 컨트롤러가 늘면 이 목록을 없애고 계약 전체와 비교한다.
 // 합격 기준: 비교 결과가 빈 목록이어야 한다. 데코레이터로 표현이 안 되면 생성된 문서를 후처리해도 되지만
 // 판정은 이 비교가 한다.
@@ -24,6 +24,8 @@ const TRIAL = {
     'addComment',
     'deleteComment',
     'getMyComments',
+    'getMyLikes',
+    'isPostLiked',
     'delete',
     'reissue',
     'logout',
