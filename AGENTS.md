@@ -52,10 +52,12 @@ apps/server/src/
                      swagger/ (setup, @Ok* decorators)
                      pageable.ts, local-date-time.ts, spring-compat.ts (request parsing and date
                      formatting that reproduce the old Spring/Jackson behavior)
+                     read-cache.ts, read-cache.module.ts (Redis read cache that reproduces the old @Cacheable)
   modules/<domain>/  one Nest module per old domain; controller -> service -> repository; dto/
   infra/             prisma/ and redis/ (connection only; queries, key names and commands live with the caller, e.g. modules/user, modules/auth);
                      (planned) storage, gemini, github
 apps/server/test/    tests that start an HTTP app (contract/, error/); support/ is the shared setup of the real-MySQL specs
+                     and the fake Redis for service specs (fake-redis.ts)
 apps/server/contract/front-contract.json
                      snapshot of the frontend's generated client; regenerate with
                      apps/server/scripts/extract-contract.mjs <frontend>/src/generated/api

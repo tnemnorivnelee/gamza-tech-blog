@@ -1,6 +1,6 @@
 # M5 읽기 API 계획
 
-작성일 2026-11-10 · 상태: M5-1(13절)·M5-2(14절)·M5-3(15절)·M5-4(16절) 구현됨, M5-5·M5-6 대기 · 이슈 #46, #48, #50, #52 · 관련: `backend-plan.md` 5·7·11절, `m4-prisma-plan.md`, `improvement-candidates.md` 22~27번, `porting-principle.md`
+작성일 2026-11-10 · 상태: M5-1(13절)·M5-2(14절)·M5-3(15절)·M5-4(16절)·M5-5(17절) 구현됨, M5-6 대기 · 이슈 #46, #48, #50, #52, #54 · 관련: `backend-plan.md` 5·7·11절, `m4-prisma-plan.md`, `improvement-candidates.md` 22~27번과 34번, `porting-principle.md`
 
 확인 기준: 옛 백엔드 `potato-club/GamzaTechBlog-back`의 `master`와 프론트 `potato-club/GamzaTechBlog-front`는 읽기만 했다(코드를 실행하지 않았다). 복원한 로컬 DB는 합계만 조회했다(개인정보 행은 보지 않았다). Spring 동작은 공식 문서와 Spring Data 소스로 확인했다. 표시: **[확인함]** 코드·문서에서 직접 확인, **[추정]** 자료로 짐작함, **[미검증]** 아직 확인할 방법이 없음. 운영 중이던 서버의 실제 응답은 못 봤으므로 "옛 동작"은 `master` 코드 기준이다.
 
@@ -76,7 +76,7 @@ M5는 프론트가 쓰는 **읽기 API 17개**를 복원한 DB 위에서 옛 서
 ### 3.5 홈 피드: `getHomeFeed`
 
 - `HomeFeedResponse{weeklyPopular, latest, allTags}`. `weeklyPopular`는 3.4, `latest`는 `getPosts`(같은 `page`, `size`, `tags`, 기본 크기 10), `allTags`는 3.6과 같다. 메시지 "홈 피드 조회 성공". 경로는 `GET /api/v1/posts/feed`다.
-- **캐시와 자기 호출** **[확인함: 코드]**: 옛 `getHomeFeed`는 같은 클래스의 `getWeeklyPopularPosts()`와 `getPosts()`를 `this`로 부른다. Spring의 캐시는 프록시를 거쳐야 걸리므로 이 두 호출에는 캐시가 걸리지 않았고, 다른 빈인 `TagService.getAllTags()`와 `homeFeed` 결과 자체만 캐시됐다. M5-5에서 캐시를 붙일 때 이 점을 맞춘다.
+- **캐시와 자기 호출** **[확인함: 코드]**: 옛 `getHomeFeed`는 같은 클래스의 `getWeeklyPopularPosts()`와 `getPosts()`를 `this`로 부른다. Spring의 캐시는 프록시를 거쳐야 걸리므로 이 두 호출에는 캐시가 걸리지 않았고, 다른 빈인 `TagService.getAllTags()`와 `homeFeed` 결과 자체만 캐시됐다. M5-5에서 이 경계를 그대로 옮겼다(17절).
 
 ### 3.6 태그: `getAllTags`
 
@@ -105,11 +105,26 @@ M5는 프론트가 쓰는 **읽기 API 17개**를 복원한 DB 위에서 옛 서
 
 ### 3.10 캐시
 
-옛 서버는 Redis를 캐시 저장소로 썼다(키 `cache:<이름>:<키>`, JSON). 기본 만료 5분이고 이름별로 다르다.
+옛 서버는 Redis를 캐시 저장소로 썼다(키 `cache:<이름>:<키>`, JSON). 기본 만료 5분이고 이름별로 다르다. 옛 `CacheConfig`와 각 서비스의 `@Cacheable`을 읽어 확인했다 **[확인함: 코드]**.
 
-- 5분: `postsList`, `postDetail`(키 글 ID), `myPosts`, `postsByTag`, `searchPosts`, `homeFeed`, `myLikes`, `introsList`, `userProfile`(키 githubId), `publicProfileAggregate`(키 닉네임-페이지-크기)
-- 30분: `hotPosts`(인기 글). 60분: `allTags`.
-- 빈 결과는 저장하지 않는 곳이 많다(`unless`).
+| 이름 | 옛 키 | 만료 | 저장하지 않는 경우(`unless`) |
+| --- | --- | --- | --- |
+| `postsList` | `쪽-크기-태그` (태그는 Java `List.toString()`인 `[a, b]`, 없으면 `all`) | 5분 | 빈 쪽 |
+| `postDetail` | 글 번호 | 5분 | 결과가 `null`(글이 없으면 예외라 저장되지 않는다) |
+| `myPosts` | `사용자 id-쪽-크기` | 5분 | 빈 쪽 |
+| `hotPosts` | `weekly` | 30분 | 빈 목록 |
+| `postsByTag` | `태그 이름-쪽-크기` | 5분 | 빈 쪽 |
+| `searchPosts` | `검색어-쪽-크기` | 5분 | 빈 쪽 |
+| `homeFeed` | `쪽-크기-태그`(`postsList`와 같다) | 5분 | 최신 글(`latest`)이 빈 쪽 |
+| `allTags` | `all` | 60분 | 없음(빈 목록도 저장) |
+| `introsList` | `p:쪽:s:크기:sort:정렬`(정렬은 Spring `Sort.toString()`, 예 `createdAt: DESC`, 여럿이면 쉼표만으로 잇는다) | 5분 | 없음(빈 쪽도 저장) |
+| `myLikes` | `사용자 id-쪽-크기-정렬` | 5분 | 없음(빈 쪽도 저장) |
+| `userProfile` | githubId | 5분 | 결과가 `null` |
+| `publicProfileAggregate` | `닉네임-쪽-크기` | 5분 | 결과가 `null` |
+
+- 목록마다 `unless`가 달라서 "빈 결과는 저장하지 않는다"를 한꺼번에 적용하면 안 된다. 글 계열 목록은 빈 쪽을 저장하지 않고 `allTags`·`introsList`·`myLikes`는 빈 결과도 저장한다.
+- 옛 서버에는 `frequentPosts`(10분)도 설정돼 있지만 어디서도 쓰지 않아서 옮기지 않는다. 프로젝트 캐시는 M5의 범위 밖이다.
+- 캐시 오류는 그대로 던진다. 옛 저장소에는 `CacheErrorHandler`가 없고, Spring의 기본 처리(`SimpleCacheErrorHandler`, 6.2.0 소스)가 읽기·쓰기 오류를 다시 던진다 **[확인함: 코드와 Spring 소스]**. 개선 후보 34번.
 - 무효화: 글 쓰기(작성, 수정, 삭제)가 `hotPosts`, `postDetail`, `postsList`, `myPosts`, `searchPosts`, `postsByTag` 전체와 `allTags`를 지운다. 좋아요 추가·취소가 해당 글의 `postDetail`과 `myLikes` 전체를, 댓글 추가·삭제가 해당 글의 `postDetail`을, 소개 작성·삭제가 `introsList`를, 프로필 수정과 프로필 이미지 변경·삭제가 해당 사용자의 `userProfile`을 지운다. **`homeFeed`와 `publicProfileAggregate`는 무효화가 없어서**(옛 저장소 전체에서 이 이름은 각자의 `@Cacheable` 한 곳에만 나온다) 쓰기 뒤에도 최대 5분 동안 낡은 값이 나간다.
 - 쓰기 API가 아직 없는 동안에는 무효화 지점이 없다. 무효화는 쓰기를 옮길 때(M6) 함께 연결한다.
 
@@ -150,7 +165,7 @@ apps/server/src/
 2. **M5-2 글 상세·인기·홈 피드·태그**: `getPostDetail`(댓글 트리 포함), `getWeeklyPopularPosts`(시각을 고정해 시험), `getHomeFeed`, `getAllTags`. **구현함(14절).**
 3. **M5-3 사용자와 소개**: `getCurrentUserProfile`, `getCurrentUserRole`, `getActivitySummary`, `getPublicProfileByNickname`, `getPendingUsers`, `getIntroList`. **구현함(15절).**
 4. **M5-4 내 댓글·좋아요**: `getMyComments`, `getMyLikes`(`tags: [null]` 포함), `isPostLiked`. **구현함(16절).**
-5. **M5-5 읽기 캐시**: Redis `cache:<이름>:<키>`, 만료 5·30·60분, 빈 결과는 저장 안 함(3.10). 무효화 연결은 M6.
+5. **M5-5 읽기 캐시**: Redis `cache:<이름>:<키>`, 만료 5·30·60분, 목록마다 다른 `unless`(3.10). 무효화 연결은 M6. **구현함(17절).**
 6. **M5-6 확인과 정리**: 계약 시험의 `TRIAL`을 계약 전체 비교로 넓히고, 복원 데이터 대조(읽기 전용), 이 문서와 `backend-plan.md` 정리.
 
 선행 없이 시작할 수 있다. 사용자의 허락이 필요한 일은 없다(진짜 DB 시험은 M4-2에서 이미 허락받은 방식이다).
@@ -158,7 +173,9 @@ apps/server/src/
 ## 7. 알려진 차이
 
 - 날짜의 소수점 아래 넷째 자리부터가 잘린다(D3).
-- 읽기 캐시를 옮기기 전(M5-1~M5-4)에는 쓰기 뒤에도 항상 최신 값이 나간다. 옛 서버는 최대 5분 낡은 값이 나갈 수 있었다. 쓰기가 없는 동안에는 차이를 볼 수 없다.
+- 읽기 캐시는 옮겼지만(M5-5) 무효화는 쓰기와 함께 M6에서 연결한다. 쓰기 API가 없는 동안에는 캐시가 낡을 일이 없어서 차이를 볼 수 없다. M6에서 연결하기 전까지는 쓰기 뒤에 만료(5·30·60분)까지 낡은 값이 나갈 수 있다.
+- 캐시 값을 Jackson 기본 타입 정보(`@class`)가 든 JSON이 아니라 보통 JSON으로 저장한다. 옛 서버가 쓰던 Redis와 같은 키에 모양이 다른 값이 생기므로 이 서버를 옛 Redis에 연결하면 안 된다(옛 서버는 이미 없다).
+- 캐시 키를 몇 군데 단순하게 했다. 응답은 같다: 사용자 id 대신 githubId를 쓴다(`myPosts`, `myLikes`). `myLikes`의 키에서 정렬을 뺐다(이 목록은 `sort`를 읽지 않아 응답이 같다). 태그가 없을 때와 빈 목록일 때를 `all` 하나로 합쳤다(둘 다 필터 없는 같은 조회다. 옛 컨트롤러의 `tags`는 `required = false`인 `List<String>`이라 없으면 `null`(키 `all`)이고, `?tags=`는 빈 목록(키 `[]`)이 된다고 본다 **[추정: Spring의 변환 규칙]**. 옛 키는 둘이 달라서 같은 결과를 두 번 저장했을 것이다).
 - 인기 글이 현재 데이터에서는 항상 빈 목록이다(최근 7일 글이 없다).
 - 소개 목록의 `sort`는 `id`·`createdAt`·`updatedAt`·`content`만 받고 나머지는 500 `C004`다. 옛 서버는 연관 속성(`user`, `user.nickname`)과 `속성,방향,ignorecase`도 정렬했을 것이다. 프론트는 `createdAt,desc`만 쓴다. `sort` 값을 한 번 더 URL 디코딩하는 Spring의 동작(`UriUtils.decode`, 3.4.0 소스에 있다)과 `ignorecase`, 점만 있는 조각 걸러내기도 옮기지 않았다(`parseSort`의 `shortcut:` 주석).
 - 내 댓글 목록의 `sort`도 `id`·`createdAt`·`updatedAt`·`content`만 받고 나머지(`post`, `user` 같은 연관 이름 포함)는 500 `C004`다. 옛 서버는 연관 속성도 정렬했을 것이다. 요청의 `sort`는 `createdAt` 내림차순 뒤에 붙어서 같은 시각 안의 순서만 정한다(옛 동작 그대로, 개선 후보 24번).
@@ -175,7 +192,7 @@ apps/server/src/
 
 ## 9. 개선 후보 (구현하지 않는다)
 
-`improvement-candidates.md` 22~27번에 적는다. 요약: 검색어 오류가 500(22), 좋아요 목록의 `tags: [null]`(23), 요청의 `sort`를 무시하는 목록과 반영하는 목록이 섞여 있음(24), 읽기 캐시가 시간 만료에 의존하고 인기 글이 최근 7일로 제한됨(25), 글 상세(공개)에는 댓글이 있는데 댓글 목록 API는 로그인이 필요함(26), 이미지 주소를 절대 URL로 저장함(27).
+`improvement-candidates.md` 22~27번과 34번(M5-5에서 추가: Redis가 죽으면 캐시가 걸린 읽기가 모두 500)에 적는다. 요약: 검색어 오류가 500(22), 좋아요 목록의 `tags: [null]`(23), 요청의 `sort`를 무시하는 목록과 반영하는 목록이 섞여 있음(24), 읽기 캐시가 시간 만료에 의존하고 인기 글이 최근 7일로 제한됨(25), 글 상세(공개)에는 댓글이 있는데 댓글 목록 API는 로그인이 필요함(26), 이미지 주소를 절대 URL로 저장함(27).
 
 ## 10. 이미지 주소와 옛 버킷 (M5가 주소를 그대로 내보내는 이유)
 
@@ -329,3 +346,34 @@ UPDATE posts          SET content           = REPLACE(content, @old, @new)      
 **알려진 차이**: 내 댓글 목록의 `sort`는 `id`·`createdAt`·`updatedAt`·`content`만 받고 나머지는 500 `C004`다(옛 서버는 연관 속성도 받았을 것이다). 날짜의 소수점 아래 넷째 자리부터가 잘린다(D3). 현재 데이터에서 태그 없는 글은 3개라서, 그 글을 좋아요 한 사용자의 목록은 `tags`가 `[null]`로 나간다.
 
 **남은 것**: M5-5(읽기 캐시). 옛 `myLikes`의 키는 `사용자 id-쪽 번호-쪽 크기-정렬 문자열`이고 좋아요 추가·취소가 `myLikes` 전체를 지운다(무효화는 M6). 내 댓글 목록에는 옛 서버에 캐시가 없었다 **[확인함: 코드]**. 전체 계약 비교와 복원 데이터 대조는 M5-6이다.
+
+## 17. M5-5 구현 결과 [확인함]
+
+**만든 것**: `common/read-cache.ts`(`ReadCache.cached(이름, 키, 읽어 오는 함수, unless)`)와 `common/read-cache.module.ts`(`ReadCacheModule`, 앱의 Redis 연결을 가져와 `ReadCache`를 내준다). 캐시가 걸린 읽기 12개: 글 7개(`postsList`, `postDetail`, `myPosts`, `hotPosts`, `postsByTag`, `searchPosts`, `homeFeed`), `allTags`, `introsList`, `myLikes`, `userProfile`, `publicProfileAggregate`. 키·만료·`unless`는 3.10의 표와 같다. 글·태그·소개·좋아요·사용자 모듈이 `ReadCacheModule`을 가져온다. 시험용 가짜 Redis는 `test/support/fake-redis.ts`다. 캐시가 없는 읽기는 옛 코드와 같다(`getMyComments`, `isPostLiked`, `getActivitySummary`, `getPendingUsers`, `getCurrentUserRole`).
+
+**구조에서 정한 것**
+
+1. **`ReadCache`는 `common/`에 둔다.** `infra/redis/`는 연결만 맡고 키 이름과 명령은 쓰는 쪽이 정한다는 원칙(AGENTS.md)을 따랐다. 캐시 이름은 `CacheName` 타입으로 묶어 오타를 컴파일에서 잡는다. 키 조각은 각 서비스가 옛 `@Cacheable`의 `key` 식대로 만든다.
+2. **옛 Spring의 프록시 경계를 코드 구조로 옮겼다.** Spring의 `@Cacheable`은 프록시를 거쳐야 걸려서 같은 클래스 안의 호출에는 걸리지 않았다. Nest에는 프록시가 없으므로, 캐시를 거는 공개 메서드와 캐시 없이 읽는 안쪽 메서드(`loadPosts`, `loadWeeklyPopularPosts`, `loadHomeFeed`, ...)를 나눴다. 홈 피드는 안쪽 두 조회를 캐시 없이 부르고 `TagService.getAllTags()`는 캐시를 거친다(옛 동작). 공개 프로필의 글 목록은 캐시가 붙은 `getMyPosts`가 아니라 캐시 없는 `PostService.findPostsByWriter`로 읽는다(옛 `postQueryPort` 직접 호출).
+3. **값은 JSON을 거친다.** 적중한 값은 문자열을 `JSON.parse`한 것이라 `Date`는 문자열이 되고 `bigint`는 저장할 때 오류가 난다. 캐시가 걸린 12개의 반환값은 모두 서비스가 이미 응답 모양(문자열 날짜, 일반 숫자)으로 바꾼 값이라 안전하다. 새 캐시를 더할 때 지킬 규칙으로 `ReadCache`의 주석에 적었다.
+
+**확인한 방법과 결과**
+
+1. 게이트 4개: `lint`, `typecheck`, `test`(44개 파일 891개 통과, 건너뜀 0개. 이전 41개 814개), `build` 통과. 전체 `yarn test`를 10번 반복해 0번 실패했다(매번 891개 통과). 바뀐 파일의 서식 검사도 통과했다.
+2. `ReadCache` 단위 시험(가짜 Redis): 미적중→저장, 적중→읽어 오는 함수를 부르지 않음, JSON 왕복 뒤 값이 같음(`null` 칸, 빈 배열, `0`, `false`, `''`), 이름이 다르면 따로 저장, 이름 12개의 만료(5분·30분·60분), `null`은 저장하지 않고 `0`·`false`·`''`·`[]`·`{}`는 저장, `unless`(참이면 저장 안 함, 거짓이면 저장, 적중하면 부르지 않음), Redis `get`·`set` 오류와 읽어 오는 함수의 오류를 삼키지 않음.
+3. 진짜 Redis 8.10.3 시험(`read-cache.redis.spec.ts`): 키 모양과 저장된 JSON, 적중, 한글·공백·쉼표가 든 키, 실제 남은 수명(300·1800·3600초 근처), `null`과 `unless`가 막은 값, 이름이 다르면 따로 저장. 진짜 캐시 이름 아래에 시험마다 겹치지 않는 키 조각(`readcache-test-<uuid>`)을 써서 개발용 Redis의 다른 키와 섞이지 않고, 끝나면 만든 키만 지운다(`SCAN`이나 `FLUSH`는 쓰지 않는다. 개발용 Redis에는 로그인 토큰이 있다).
+4. 서비스별 시험(가짜 Redis 위의 진짜 `ReadCache`): 이름·키·만료, 쪽 번호·크기·태그·사용자·검색어가 키에 들어가는지, 목록마다 다른 `unless`(글 계열은 빈 쪽 비저장, `allTags`·`introsList`·`myLikes`는 빈 결과도 저장), 두 번째 호출이 첫 호출과 같은 값인지와 저장소를 다시 부르지 않는지, 404는 저장하지 않는지, 홈 피드의 안쪽 조회와 공개 프로필의 글 목록이 캐시를 거치지 않는지(홈 피드 뒤에 `postsList`·`hotPosts` 키가 없고 `allTags` 키는 있다, 공개 프로필 뒤에 `myPosts` 키가 없다), `isPostLiked`·`getActivitySummary`·`getPendingUsers`에 캐시가 없는지.
+5. 변이 시험 71개(만료 값과 표, 키 접두사·이름·구분자, `null` 건너뛰기, `unless`의 유무와 반전과 조건, 오류 삼키기, 키 조각 하나씩 빼기, 캐시 이름 바꾸기, 쪽·크기 순서, 태그 구분자와 대괄호, 정렬 구분자와 방향 표기, 닉네임 소문자화, 캐시를 거치지 않는 안쪽 경로에 캐시 걸기, 모듈 등록)를 돌려 71개를 모두 시험이 잡았다. 실패 이유가 단언 실패인지 표본으로 확인했고, 원본은 해시로 복원을 확인했다.
+6. 시험이 개발 DB에 남긴 것이 없다: 전체 시험 전후의 합계가 같다(users 15, posts 58, tags 45, post_tags 76, post_images 129, comments 35, likes 83, introductions 1, profile_images 15, repository 5). 변이 시험은 개발용 Redis에 시험 전용 접두사(`readcache-test-<uuid>`) 키를 남겼다(키 모양을 바꾸는 변이 둘이 시험의 정리 목록을 벗어났다). `*readcache-test-*`로만 찾아 모두 지웠고, 지운 뒤 개발용 Redis에는 `cache:*` 키가 하나도 없다. 정상 시험은 남기지 않는다.
+
+**알게 된 함정**
+
+1. **적중한 값은 처음 읽은 값과 같아야 한다.** JSON을 거치면 `Date`가 문자열이 되어 첫 호출(미적중)과 두 번째 호출(적중)의 타입이 달라진다. 이 문제가 없는지 서비스마다 "두 번째 호출 = 첫 호출" 시험을 두었다.
+2. **`unless`가 목록마다 다르다.** 한꺼번에 "빈 결과는 저장하지 않는다"로 만들면 `allTags`·`introsList`·`myLikes`가 옛 동작과 달라진다. 호출하는 쪽이 `unless`를 넘기게 해서 이름별로 정했다.
+3. **구분자가 두 종류다.** 글 목록의 태그 키는 Java `List.toString()`이라 `[a, b]`(쉼표 뒤 공백)이고, 소개 목록의 정렬은 `Sort.toString()`이라 `createdAt: DESC`(콜론 뒤 공백)이며 여러 개는 쉼표만으로 잇는다(공백 없음, Spring Data Commons 3.4.0 소스로 확인).
+4. **현재 데이터에서 인기 글은 항상 빈 목록이라 저장되지 않는다**(최근 7일 글이 없다). 홈 피드는 인기 글이 비어도 최신 글이 있으면 저장된다(`unless`가 `latest`만 본다).
+5. **변이 시험은 개발용 Redis를 어지럽힐 수 있다.** 키 이름을 바꾸는 변이가 시험의 정리 목록을 벗어난 키를 만든다. `cache:`로 시작하는 키만 찾으면 접두사를 바꾸는 변이(`c:`)의 키를 놓치므로 `*readcache-test-*`로 찾았고, 그 접두사로만 지웠다. 변이 시험을 다시 돌릴 때도 같은 확인이 필요하다.
+
+**알려진 차이**: 7절에 적었다(값 형식, 키 단순화, 무효화 없음). 요약하면 값은 `@class` 없는 보통 JSON이고, 사용자 id 대신 githubId를 키에 쓰며, `myLikes` 키에서 정렬을 뺐고, 태그 없음과 빈 목록을 `all` 하나로 합쳤다. 응답은 옛 서버와 같다.
+
+**남은 것**: M5-6(계약 시험을 전체 비교로 넓히기, 복원 데이터 대조, 이 문서와 `backend-plan.md` 정리). 서버를 실제로 띄워 진짜 Redis·진짜 DB 위에서 17개 API를 부르는 확인도 M5-6에서 한다(지금까지의 서비스 시험은 가짜 저장소, 저장소 시험은 진짜 MySQL, 캐시 시험은 진짜 Redis로 따로 본 것이다). 무효화(`@CacheEvict`)는 쓰기를 옮기는 M6에서 연결한다. 옛 무효화는 대부분 `allEntries`(이름 전체 삭제)라서 `cache:<이름>:*`를 찾아 지워야 하고, 이때 `KEYS` 대신 `SCAN`을 쓴다 **[제안]**. `homeFeed`와 `publicProfileAggregate`는 옛 서버에도 무효화가 없다(3.10).
