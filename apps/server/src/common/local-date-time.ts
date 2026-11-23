@@ -11,3 +11,8 @@ export function toLocalDateTime(date: Date): string {
     .replace(/0+$/, '');
   return millis === '' ? seconds : `${seconds}.${millis}`;
 }
+
+// UserProfileResponse의 날짜는 문자열 필드이고 MapStruct가 yyyy-MM-dd'T'HH:mm:ss로 만들었다(초까지, 소수점 없음).
+// 초 아래는 반올림하지 않고 버린다. 읽는 기준은 toLocalDateTime과 같다(DB의 벽시계 값을 Date의 UTC 필드로 읽는다).
+export const toLocalDateTimeSeconds = (date: Date): string =>
+  date.toISOString().slice(0, 19);

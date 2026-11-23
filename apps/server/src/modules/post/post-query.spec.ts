@@ -1,6 +1,6 @@
 import { BusinessException } from '../../common/error/business.exception.js';
 import { ErrorCode } from '../../common/error/error-code.js';
-import { parseTags, readKeyword } from './post-query.js';
+import { parseTags, readKeyword, readTags } from './post-query.js';
 
 describe('parseTags', () => {
   it('값이 하나면 쉼표로 쪼개고 조각마다 앞뒤 공백을 자른다', () => {
@@ -14,8 +14,8 @@ describe('parseTags', () => {
     expect(parseTags(['a,b', 'c'])).toEqual(['a,b', 'c']);
   });
 
-  // Spring은 tags[]=a도 tags로 읽고, 값이 하나뿐이면 문자열로 보고 쪼갠다.
-  it('값이 하나뿐인 배열(tags[]=a,b)은 단일 값처럼 쪼갠다', () => {
+  // Spring은 값이 하나뿐이면 배열이어도 문자열로 보고 쪼갠다.
+  it('값이 하나뿐인 배열은 단일 값처럼 쪼갠다', () => {
     expect(parseTags(['a,b'])).toEqual(['a', 'b']);
   });
 
@@ -80,5 +80,26 @@ describe('readKeyword', () => {
 
   it('같은 이름이 여러 번 오면 첫 값을 쓴다', () => {
     expect(readKeyword({ keyword: ['a', 'b'] })).toBe('a');
+  });
+});
+
+describe('readTags', () => {
+  it('tags를 읽는다', () => {
+    expect(readTags({ tags: 'a,b' })).toEqual(['a', 'b']);
+  });
+
+  // Spring은 tags가 없을 때만 tags[]를 읽는다.
+  it('tags가 없으면 tags[]를 읽는다', () => {
+    expect(readTags({ 'tags[]': 'a,b' })).toEqual(['a', 'b']);
+    expect(readTags({ 'tags[]': ['a,b', 'c'] })).toEqual(['a,b', 'c']);
+  });
+
+  it('tags가 있으면 tags[]는 무시한다(빈 값이어도 tags가 이긴다)', () => {
+    expect(readTags({ tags: 'x', 'tags[]': 'y' })).toEqual(['x']);
+    expect(readTags({ tags: '', 'tags[]': 'y' })).toEqual([]);
+  });
+
+  it('둘 다 없으면 빈 목록이다', () => {
+    expect(readTags({})).toEqual([]);
   });
 });

@@ -159,6 +159,18 @@ describe('글 목록 조회 API', () => {
       ]);
     });
 
+    // Spring 6.2의 @RequestParam은 tags가 없으면 tags[]를 읽는다. Express 5는 tags[]를 다른 이름으로 둬서 따로 읽어야 한다.
+    it('tags[](대괄호)도 tags처럼 읽는다', async () => {
+      await t.get('/api/v1/posts?tags[]=a,b');
+      await t.get('/api/v1/posts?tags[]=a&tags[]=b');
+      await t.get('/api/v1/posts/feed?tags[]=a,b');
+      expect(t.service.getPosts.mock.calls.map(([, tags]) => tags)).toEqual([
+        ['a', 'b'],
+        ['a', 'b'],
+      ]);
+      expect(t.service.getHomeFeed.mock.calls[0][1]).toEqual(['a', 'b']);
+    });
+
     it('한글 태그를 URL 인코딩해서 보내도 받는다', async () => {
       await t.get(`/api/v1/posts?tags=${encodeURIComponent('백엔드')}`);
       expect(t.service.getPosts.mock.calls[0][1]).toEqual(['백엔드']);

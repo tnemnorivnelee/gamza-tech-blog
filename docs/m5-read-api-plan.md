@@ -1,6 +1,6 @@
 # M5 읽기 API 계획
 
-작성일 2026-11-10 · 상태: M5-1(13절)·M5-2(14절) 구현됨, M5-3~M5-6 대기 · 이슈 #46, #48 · 관련: `backend-plan.md` 5·7·11절, `m4-prisma-plan.md`, `improvement-candidates.md` 22~27번, `porting-principle.md`
+작성일 2026-11-10 · 상태: M5-1(13절)·M5-2(14절)·M5-3(15절) 구현됨, M5-4~M5-6 대기 · 이슈 #46, #48, #50 · 관련: `backend-plan.md` 5·7·11절, `m4-prisma-plan.md`, `improvement-candidates.md` 22~27번, `porting-principle.md`
 
 확인 기준: 옛 백엔드 `potato-club/GamzaTechBlog-back`의 `master`와 프론트 `potato-club/GamzaTechBlog-front`는 읽기만 했다(코드를 실행하지 않았다). 복원한 로컬 DB는 합계만 조회했다(개인정보 행은 보지 않았다). Spring 동작은 공식 문서와 Spring Data 소스로 확인했다. 표시: **[확인함]** 코드·문서에서 직접 확인, **[추정]** 자료로 짐작함, **[미검증]** 아직 확인할 방법이 없음. 운영 중이던 서버의 실제 응답은 못 봤으므로 "옛 동작"은 `master` 코드 기준이다.
 
@@ -29,6 +29,7 @@ M5는 프론트가 쓰는 **읽기 API 17개**를 복원한 DB 위에서 옛 서
 - **응답 래퍼**: `ResponseDto{status, message, data, timestamp}`. 이미 M1에서 만들었다. 메시지 문자열도 동작이므로 그대로 옮긴다(3.2~3.9에 적었다).
 - **페이지 해석**(Spring 공식 설정과 Spring Data 소스로 확인): 요청 파라미터는 `page`, `size`, `sort`이고 페이지는 0부터 센다. 기본값은 `@PageableDefault`가 붙은 곳은 **크기 10**, 안 붙은 곳은 **크기 20**이다. `page`가 음수이거나 숫자가 아니면 0, `size`가 1 미만이거나 숫자가 아니면 기본 크기, 2000을 넘으면 2000으로 보정한다. 비어 있으면 기본값이다. 어떤 값도 오류가 되지 않는다.
 - **정렬**: 글 목록 계열과 좋아요 목록은 요청의 `sort`를 **무시하고** 항상 `createdAt` 내림차순으로 고정되어 있다. 소개 목록(`findAll(pageable)`)은 요청의 `sort`를 반영한다(기본 `createdAt` 내림차순). 내 댓글 목록은 메서드 이름의 `createdAt` 내림차순에 요청의 `sort`가 덧붙는다 **[추정: Spring Data의 일반 동작]**. 소개·댓글에서 없는 속성으로 정렬하면 처리되지 않은 예외라서 500 `C004`가 된다 **[추정]**.
+- **`sort` 문법** **[확인함: 옛 서버의 Spring Boot 3.4.0이 쓰는 Spring Data Commons 3.4.0 소스 `SortHandlerMethodArgumentResolver`, M5-3에서 소개 목록에 구현]**: `sort=속성,방향`이고 여러 번 올 수 있다. 쉼표로 쪼갠 마지막 조각이 `asc`·`desc`(대소문자 무시)이면 방향이고, 아니면 오름차순이다. 나머지 조각은 모두 속성이다(`sort=a,b,desc`는 둘 다 내림차순). 조각은 다듬지 않고(`createdAt, desc`의 ` desc`는 방향이 아니라 속성이다) 비거나 공백뿐인 속성은 건너뛴다. 요청에 `sort`가 없거나(`sort=`도 같다) 해석한 결과가 비면 `PageableHandlerMethodArgumentResolver`가 `@PageableDefault`의 기본 정렬을 쓰고(`!sort.isSorted()`), 하나라도 읽히면 기본 정렬을 **바꾼다**(더하지 않는다). `sort[]=`(대괄호)는 읽지 않는다(`getParameterValues("sort")`뿐이고 Express 5도 다른 이름으로 둬서 같다). 속성 이름은 응답 필드가 아니라 **엔티티 필드 이름**이다(소개는 `id`, `createdAt`, `updatedAt`, `content`, `user`라서 `sort=introId`는 없는 속성이다). 소개 목록은 `id`·`createdAt`·`updatedAt`·`content`만 받고 나머지는 500 `C004`다(7절).
 - **날짜**: `LocalDateTime` 필드는 Jackson 기본 직렬화로 `2025-07-27T21:08:37.109696`처럼 나간다(시간대 표시 없음, 소수점 이하는 0이 아닌 자리까지, 0이면 생략) **[추정: 설정 파일에 Jackson 설정이 없다]**. 예외로 `UserProfileResponse`의 `createdAt`·`updatedAt`은 문자열이고 형식이 `yyyy-MM-dd'T'HH:mm:ss`(초까지)다. 프론트의 생성 클라이언트는 날짜 필드를 `Date`로 받으므로 소수점 아래 자릿수는 화면에 영향이 없다 **[추정]**.
 - **없는 대상**: 글이 없으면 404 `P001`(`POST_NOT_FOUND`), 사용자가 없으면 404 `U001`(`USER_NOT_FOUND`). 둘 다 우리 `ErrorCode`에 이미 있다.
 - **경로의 `Long`**(`@PathVariable Long postId`) **[확인함: Spring 소스]**: Spring의 숫자 변환(`StringToNumberConverterFactory` → `NumberUtils.parseNumber`)을 거친다. 값 안의 공백을 **모두** 지우고(Java `Character.isWhitespace` 기준), `0x`·`0X`·`#`로 시작하면(앞에 `-`는 가능, `+`는 불가) 16진수로 `Long.decode`, 아니면 `Long.valueOf`(부호 `+`·`-` 가능)로 읽는다. 숫자가 아니거나 int64 범위를 넘으면 400 `C005`(`INVALID_TYPE_VALUE`)다(개선 후보 30번). 숫자 형식이면 없는 글은 404 `P001`이다.
@@ -53,7 +54,7 @@ M5는 프론트가 쓰는 **읽기 API 17개**를 복원한 DB 위에서 옛 서
 - **범위를 넘긴 쪽**: 그 쪽에 글이 없으면 개수를 세지 않고 `totalElements`와 `totalPages`를 0으로 돌려준다(옛 `PageImpl(List.of(), pageable, 0)`). 글이 58개여도 `page=99`는 `content: []`, `totalElements: 0`, `totalPages: 0`이다. `page`와 `size`는 요청에서 고친 값이고 내용의 개수가 아니다 **[확인함: 코드]** (개선 후보 28번).
 - **null**: `writerProfileImageUrl`과 `thumbnailImageUrl`은 없으면 키를 빼지 않고 `null`로 나간다. `NON_NULL`은 `ResponseDto`에만 붙어 있고 설정 파일에도 Jackson 설정이 없다 **[확인함: 코드]**.
 - **같은 작성 시각의 순서**: 옛 쿼리는 정하지 않았다. 새 쿼리는 `postId` 내림차순으로 마무리해서 쪽을 넘겨도 순서가 흔들리지 않게 한다(옛 동작의 허용 범위 안).
-- **`tags`가 `List<String>`이 되는 규칙** **[확인함: Spring 소스]**: 값이 하나면 문자열로 받아 쉼표로 쪼개고 조각마다 `trim`한다(`tags=a,b`, `tags[]=a,b`도 같다). 값이 여러 개면 배열로 받아 쪼개지 않는다(`tags=a,b&tags=c`는 `["a,b", "c"]`). 빈 문자열은 빈 목록이고 빈 목록은 필터 없음이다.
+- **`tags`가 `List<String>`이 되는 규칙** **[확인함: Spring 소스]**: 값이 하나면 문자열로 받아 쉼표로 쪼개고 조각마다 `trim`한다(`tags=a,b`, `tags[]=a,b`도 같다. Spring 6.2의 `@RequestParam`은 `tags`가 없을 때 `tags[]`를 읽는다. Express 5의 기본 쿼리 해석기는 `tags[]`를 다른 이름으로 둬서 `readTags`가 직접 읽는다). 값이 여러 개면 배열로 받아 쪼개지 않는다(`tags=a,b&tags=c`는 `["a,b", "c"]`). 빈 문자열은 빈 목록이고 빈 목록은 필터 없음이다.
 - **Java와 JS의 차이**: `page`·`size`는 `Integer.parseInt`라서 부호와 숫자만 받고 int32 범위 안이어야 한다(공백, 소수, `1e3`은 숫자가 아님). `trim()`은 U+0020 이하만 지워서 전각 공백(U+3000)은 남는다. 검색어의 `@NotBlank`와 스니펫이 이 기준이다. JS의 `Number()`와 `trim()`을 그대로 쓰면 결과가 달라진다.
 - 공개 프로필의 글 목록과 홈 피드의 `latest`도 같은 조회다(3.5, 3.8).
 
@@ -84,14 +85,17 @@ M5는 프론트가 쓰는 **읽기 API 17개**를 복원한 DB 위에서 옛 서
 ### 3.7 소개: `getIntroList`
 
 - `IntroResponse{introId, userId, nickname, profileImageUrl, content, createdAt}`, 요청의 `sort`를 반영하고 기본은 `createdAt` 내림차순, 기본 크기 10. 메시지 "자기소개 목록 조회 성공". 현재 데이터는 1건이다.
+- **값** **[확인함: 코드]**: `nickname`과 `profileImageUrl`은 작성자의 것이고 이미지가 없으면 `null`이다(`IntroResponse`는 `NON_NULL`이 아니다). `createdAt`은 3.1의 날짜 모양이다. `content`는 있는 그대로다(글 목록처럼 이미지 표기를 지우지 않는다).
+- **쪽 나누기** **[확인함: Spring Data 소스]**: 글 목록과 달리 `findAll(pageable)`이라서 범위를 넘긴 쪽도 실제 전체 개수를 센다(`PageableExecutionUtils`는 빈 쪽이고 `offset`이 0보다 크면 개수 쿼리를 보낸다). 그래서 글이 1건이어도 `page=99`는 `content: []`, `totalElements: 1`, `totalPages: 1`이다(글 목록은 0, 3.2절).
+- 같은 `createdAt`의 순서는 옛 쿼리가 정하지 않았다. 새 쿼리는 `introId` 내림차순으로 마무리한다(요청의 방향과 상관없이).
 
 ### 3.8 사용자: `getCurrentUserProfile`, `getCurrentUserRole`, `getActivitySummary`, `getPublicProfileByNickname`, `getPendingUsers`
 
-- `getCurrentUserProfile`: `UserProfileResponse{githubId, nickname, name, email, profileImageUrl, position, role, studentNumber, gamjaBatch, createdAt, updatedAt}`. `position`·`role`은 enum 이름 문자열, 날짜는 3.1의 초 단위 문자열. 메시지 "프로필 조회 성공".
-- `getCurrentUserRole`: role 이름 문자열. 메시지 "역할 조회 성공".
-- `getActivitySummary`: `{likedPostCount, writtenPostCount, writtenCommentCount}`(좋아요 수, 쓴 글 수, 쓴 댓글 수). 메시지 "유저 활동 정보 조회 성공".
-- `getPublicProfileByNickname`: 닉네임이 없으면 404 `U001`. `{profile{profileImageUrl, nickname, gamjaBatch}, activity(위와 같은 세 숫자), posts(그 사용자의 글 PagedResponse<PostListResponse>)}`. 이 엔드포인트만 `@PageableDefault`가 없어서 **기본 크기가 20**이다. 글 정렬은 3.2처럼 고정. 메시지 "공개 프로필 조회 성공".
-- `getPendingUsers`: role이 `PENDING`인 사용자 전체. `PendingUserResponse{userId, gamjaBatch, name, position}`. 메시지 "대기 중인 사용자 조회 성공". 현재 데이터에 PENDING이 0명이다.
+- `getCurrentUserProfile`: `UserProfileResponse{githubId, nickname, name, email, profileImageUrl, position, role, studentNumber, gamjaBatch, createdAt, updatedAt}`. `position`·`role`은 enum 이름 문자열, 날짜는 3.1의 초 단위 문자열. 메시지 "프로필 조회 성공". 토큰의 사용자를 DB에서 **다시 읽고**(`validateAndGetUserByGithubId`) 그 사이 사라졌다면 404 `U001`이다. 값이 없는 칸(`email`, `profileImageUrl`, `position`, `studentNumber`, `gamjaBatch`)은 키째 빠지지 않고 `null`이다 **[확인함: 코드]**. 날짜는 MapStruct `dateFormat`이라 소수점 없이 초까지다(반올림 없이 버린다).
+- `getCurrentUserRole`: role 이름 문자열. 메시지 "역할 조회 성공". DB를 읽지 않고 토큰으로 가드가 찾아 둔 사용자(principal)의 role을 그대로 준다 **[확인함: 코드]**.
+- `getActivitySummary`: `{likedPostCount, writtenPostCount, writtenCommentCount}`(좋아요 수, 쓴 글 수, 쓴 댓글 수). 메시지 "유저 활동 정보 조회 성공". 셋 다 `countByUser`, 곧 **행 수**다: 좋아요 행(`likes`에는 `(user, post)` 유일 제약이 없어서 중복 행이 있으면 그만큼 세어진다), 쓴 글, 쓴 댓글(답글 포함). 값은 int32다 **[확인함: 코드]**.
+- `getPublicProfileByNickname`: 닉네임이 없으면 404 `U001`. `{profile{profileImageUrl, nickname, gamjaBatch}, activity(위와 같은 세 숫자), posts(그 사용자의 글 PagedResponse<PostListResponse>)}`. 이 엔드포인트만 `@PageableDefault`가 없어서 **기본 크기가 20**이다. 글 정렬은 3.2처럼 고정이고 글 목록은 `getMyPosts`와 같은 조회다(요청의 `sort`는 무시하므로 틀린 `sort`도 오류가 아니다). 메시지 "공개 프로필 조회 성공". 닉네임은 `findByNickname`이라 컬럼의 정렬 규칙(`utf8mb4_0900_ai_ci`)을 따라 **대소문자와 악센트를 구분하지 않고**, 응답에는 요청 값이 아니라 **저장된 닉네임**이 나간다. 끝의 공백은 값으로 취급한다(`NO PAD`). `profile`의 이미지가 없으면 `null`이다 **[확인함: 코드, 규칙은 시험으로 확인]**.
+- `getPendingUsers`: role이 `PENDING`인 사용자 전체. `PendingUserResponse{userId, gamjaBatch, name, position}`. 메시지 "대기 중인 사용자 조회 성공". 현재 데이터에 PENDING이 0명이다. 경로는 `/api/admin/users/pending`(v1이 없다), 관리자만이다. 옛 `findAllByRole`은 순서를 정하지 않았다(기본 키 순서로 짐작해 `userId` 오름차순 **[추정]**, 개선 후보 32번). `position`이 없으면 `null`이다.
 
 ### 3.9 내 댓글·좋아요: `getMyComments`, `getMyLikes`, `isPostLiked`
 
@@ -123,7 +127,7 @@ apps/server/src/
     like/            내 좋아요 읽기
 ```
 
-- 층은 `controller -> service -> repository`이고 Prisma는 `*.repository.ts`에서만 import한다(AGENTS). 글 목록처럼 여러 테이블이 얽힌 조회는 옛 코드도 한 쿼리 어댑터 안에 있었으므로 `PostRepository` 안에서 `include`로 풀고, 다른 모듈의 repository를 부르지 않는다.
+- 층은 `controller -> service -> repository`이고 Prisma는 `*.repository.ts`에서만 import한다(AGENTS). 글 목록처럼 여러 테이블이 얽힌 조회는 옛 코드도 한 쿼리 어댑터 안에 있었으므로 `PostRepository` 안에서 `include`로 풀고, 다른 모듈의 repository를 부르지 않는다. 사용자 읽기(M5-3)는 위 "기존 `UserRepository`"를 넓히지 않고 Prisma 전용 `UserQueryRepository`를 따로 뒀다: `UserRepository`는 가드와 로그인이 쓰는 바꿔 끼우는 인터페이스(운영은 Prisma, 시험은 인메모리)인데, 활동 개수는 글·좋아요·댓글 테이블에 걸쳐 있어서 인메모리 가짜가 흉내 내야 할 것이 많아지기 때문이다.
 - **쿼리**: Prisma 문법으로 쓴다. 태그 필터는 `postTags: { some: { tag: { tagName: { in } } } }`라서 조인 중복이 없고 `GROUP BY`가 필요 없다. 인기 글은 `orderBy: { likes: { _count: 'desc' } }`로 된다. 썸네일은 목록의 글 ID들로 이미지를 `post_image_id` 오름차순으로 한 번 더 읽어서 글마다 첫 것을 고른다(옛 코드와 같은 방식). 검색은 Prisma의 `contains`를 쓰되, `%`·`_`가 글자 그대로 취급되는지 시험으로 확인하고(8절 1번) 안 되면 검색만 `$queryRaw`로 쓴다.
 - **공용 부품 두 개** (호출처가 3곳 이상이라 뽑는다): `common/pageable.ts`는 3.1의 규칙대로 쿼리를 `{page, size, sort}`로 바꾼다(기본 크기를 인자로 받는다). `common/local-date-time.ts`는 `Date`를 3.1의 날짜 문자열로 바꾼다(DB의 벽시계 값을 `Date`의 UTC 필드로 읽는 약속은 `m4-prisma-plan.md` 11절). 글 요약(스니펫)은 `modules/post/`에 둔다(글 목록과 좋아요 목록, 둘 다 글 모듈의 규칙이다).
 - `BigInt` 컬럼(id, 개수)은 응답에 실을 때 `Number(...)`로 바꾼다(`m4-prisma-plan.md` 10절).
@@ -144,7 +148,7 @@ apps/server/src/
 
 1. **M5-1 공통 부품과 글 목록 4개**: `pageable.ts`, `local-date-time.ts`, 스니펫, `PostListResponse` 등 DTO를 실제 모듈로, `PostRepository`의 `fetchPosts`. 작업: `getPosts`, `getPostsByTag`, `searchPosts`, `getMyPosts`. 시험: 페이지 해석 규칙, 날짜 문자열, 스니펫, 태그 OR 필터, 대소문자와 `%`·`_` 검색, 정렬 고정, 총 개수, 접근 규칙, 계약.
 2. **M5-2 글 상세·인기·홈 피드·태그**: `getPostDetail`(댓글 트리 포함), `getWeeklyPopularPosts`(시각을 고정해 시험), `getHomeFeed`, `getAllTags`. **구현함(14절).**
-3. **M5-3 사용자와 소개**: `getCurrentUserProfile`, `getCurrentUserRole`, `getActivitySummary`, `getPublicProfileByNickname`, `getPendingUsers`, `getIntroList`.
+3. **M5-3 사용자와 소개**: `getCurrentUserProfile`, `getCurrentUserRole`, `getActivitySummary`, `getPublicProfileByNickname`, `getPendingUsers`, `getIntroList`. **구현함(15절).**
 4. **M5-4 내 댓글·좋아요**: `getMyComments`, `getMyLikes`(`tags: [null]` 포함), `isPostLiked`.
 5. **M5-5 읽기 캐시**: Redis `cache:<이름>:<키>`, 만료 5·30·60분, 빈 결과는 저장 안 함(3.10). 무효화 연결은 M6.
 6. **M5-6 확인과 정리**: 계약 시험의 `TRIAL`을 계약 전체 비교로 넓히고, 복원 데이터 대조(읽기 전용), 이 문서와 `backend-plan.md` 정리.
@@ -156,6 +160,7 @@ apps/server/src/
 - 날짜의 소수점 아래 넷째 자리부터가 잘린다(D3).
 - 읽기 캐시를 옮기기 전(M5-1~M5-4)에는 쓰기 뒤에도 항상 최신 값이 나간다. 옛 서버는 최대 5분 낡은 값이 나갈 수 있었다. 쓰기가 없는 동안에는 차이를 볼 수 없다.
 - 인기 글이 현재 데이터에서는 항상 빈 목록이다(최근 7일 글이 없다).
+- 소개 목록의 `sort`는 `id`·`createdAt`·`updatedAt`·`content`만 받고 나머지는 500 `C004`다. 옛 서버는 연관 속성(`user`, `user.nickname`)과 `속성,방향,ignorecase`도 정렬했을 것이다. 프론트는 `createdAt,desc`만 쓴다. `sort` 값을 한 번 더 URL 디코딩하는 Spring의 동작(`UriUtils.decode`, 3.4.0 소스에 있다)과 `ignorecase`, 점만 있는 조각 걸러내기도 옮기지 않았다(`parseSort`의 `shortcut:` 주석).
 
 ## 8. 미검증
 
@@ -163,7 +168,7 @@ apps/server/src/
 2. `postTags`와 `replies`의 정렬(옛은 지정이 없고 기본 키 순서로 짐작한다). 글 목록·상세의 태그는 `postTagId`, 답글은 `commentId` 오름차순으로 구현했다(M5-1·M5-2). 옛 서버의 실제 응답을 못 봐서 **[추정]**이 남는다(현재 데이터에는 답글이 0개, 태그 순서는 연결한 순서와 같을 것으로 본다).
 3. 옛 응답의 날짜가 실제로 마이크로초까지 나갔는지. 운영 응답을 못 봐서 확인할 수 없고, 프론트가 `Date`로 파싱하므로 영향이 없다고 본다.
 4. 옛 운영에서 캐시가 실제로 동작했는지(설정상 Redis는 연결되어 있다). 운영 응답이 낡았는지는 못 봤다.
-5. `sort` 문법(`property,dir`)에서 틀린 값을 만났을 때 Spring이 하는 일의 세부(소개·내 댓글에만 영향). 흔한 값(`createdAt,desc`)만 맞추고, 그 밖은 500 `C004`로 둔다.
+5. ~~`sort` 문법(`property,dir`)에서 틀린 값을 만났을 때 Spring이 하는 일의 세부~~ 문법은 Spring Data 소스로 확인했다(3.1). 소개 목록에는 `id`·`createdAt`·`updatedAt`·`content`만 허용하고 그 밖은 500 `C004`로 둔다. 옛 서버의 실제 응답은 못 봐서 500인지는 **[추정]**이다. 내 댓글(M5-4)은 "메서드 이름의 정렬에 덧붙는다"가 달라서 그때 따로 확인한다.
 6. 한글 태그를 경로에 넣을 때(`/posts/tags/{tagName}`)의 인코딩. 시험에 한글 태그를 넣는다.
 
 ## 9. 개선 후보 (구현하지 않는다)
@@ -259,4 +264,34 @@ UPDATE posts          SET content           = REPLACE(content, @old, @new)      
 
 **알려진 차이**: 날짜의 소수점 아래 넷째 자리부터가 잘린다(D3). 답글과 태그의 순서는 옛 서버가 정하지 않아 기본 키 순서로 짐작했다(8절 2번). 숫자는 ASCII만 받는다(`spring-compat.ts`의 `shortcut:` 주석). 홈 피드의 세 조회는 옛 코드가 차례로 불렀지만 새 코드는 동시에 보낸다(결과는 같다). 인기 글은 현재 데이터(마지막 글 2026-05-16)에서 빈 목록이다.
 
-**남은 것**: M5-3(사용자와 소개). 홈 피드의 안쪽 호출에 캐시가 걸리지 않았던 점(3.5)은 M5-5에서 맞춘다.
+**남은 것**: M5-3(사용자와 소개, 15절에서 구현함). 홈 피드의 안쪽 호출에 캐시가 걸리지 않았던 점(3.5)은 M5-5에서 맞춘다.
+
+## 15. M5-3 구현 결과 [확인함]
+
+**만든 것**: `modules/introduction/`(`GET /api/v1/intros`: `intro.controller.ts`, `intro.service.ts`, `intro.repository.ts`, `dto/intro-response.dto.ts`, `intro.module.ts`)와 `modules/user/`의 사용자 API(`GET /api/v1/users/me/get/profile`, `/me/activity`, `/me/role`, `/public/profile/:nickname`, 그리고 `GET /api/admin/users/pending`: `user.controller.ts`, `admin-user.controller.ts`, `user.service.ts`, `user-query.repository.ts`, `dto/` 5개. 기존 `user.module.ts`에 컨트롤러·서비스·조회 저장소를 더했다). `common/pageable.ts`에 `parseSort`(요청의 `sort` 해석)를, `common/local-date-time.ts`에 `toLocalDateTimeSeconds`(`UserProfileResponse`의 초 단위 날짜)를 더했다. `PostModule`은 공개 프로필의 글 목록을 위해 `PostService`를 내보낸다. M5-1의 `tags[]=` 구멍을 `post-query.ts`의 `readTags`로 고쳤다(함정 7). 계약 시험은 `TRIAL.operations`에 6개를 더했고 가짜 컨트롤러 없이 실제 컨트롤러로 비교한다. "없는 작업" 시험은 앞으로도 옮기지 않을 `getAllProjects`로 바꿨다. 앱 조립 시험(`app.module.spec.ts`)에는 새 컨트롤러 3개의 등록 단언을 더했다.
+
+**구조에서 정한 것**: 사용자 읽기는 `UserQueryRepository`(Prisma 전용 클래스)가 맡고, 가드와 로그인이 쓰는 `UserRepository`(바꿔 끼우는 인터페이스)는 넓히지 않았다(4절). 사용자 API는 `UserModule` 하나에 컨트롤러·서비스·저장소를 모두 둔다. 옛 Spring의 `domain/user`도 `UserController`·`UserService`·`UserRepository`가 하나씩이고, 인증(`UserDetailServiceImpl`)이 같은 `UserRepository`를 쓴다(`GamzaTechBlog-back`의 `master`를 읽어 확인). 처음에는 `AuthModule`이 `UserModule`을 가져오는데 여기에 `PostModule`을 가져오는 컨트롤러까지 넣으면 `AuthModule`을 쓰는 시험 앱에 글 컨트롤러와 실제 서비스가 딸려 와서 시험이 틀어질 것이라 짐작해 `UserApiModule`로 따로 뒀다. 합친 상태로 돌려 보니 분리했을 때와 결과가 같아서(`typecheck` 통과, 단위 시험 598개 통과·14개 건너뜀, 건너뛴 것은 Redis가 없으면 생략되는 시험) 짐작이 틀린 것으로 확인하고 하나로 합쳤다. 인증을 건너뛰는 것은 모듈 위치가 아니라 `@Public()`이 정한다(전역 `AuthGuard`가 첫 줄에서 통과시킨다).
+
+**확인한 방법과 결과**
+
+1. 게이트 4개: `lint`, `typecheck`, `test`(35개 파일 710개, 이전 29개 604개), `build` 통과. 전체 `yarn test`를 10번 반복해 0번 실패했다.
+2. 진짜 MySQL 8.4.13으로 하는 저장소 시험: 소개 19개(기본 정렬과 같은 시각의 `introId` 마무리, 요청 `sort`의 `id`·`createdAt`·`updatedAt`·`content`와 여러 항목, 허용 목록 밖 6개 이름의 500 `C004`, 쪽 나누기, 범위를 넘긴 쪽의 실제 `totalElements`, 값 변환, 이미지 없음 `null`)와 사용자 17개(프로필의 모든 칸과 `null`, 닉네임 조회의 대소문자·악센트 무시와 저장된 닉네임 반환, 끝 공백은 다른 값, 한글 닉네임, 활동 개수의 행 수 세기와 남의 활동 제외, PENDING만 `userId` 오름차순).
+3. 순수 함수·서비스·컨트롤러 시험(서비스·저장소·토큰 저장소는 가짜): `parseSort` 문법 12개(방향 대소문자, 방향 없음, 끝 쉼표, 방향이 아닌 조각은 속성, 여러 번 온 `sort`, 기본 정렬을 바꿈), 서비스의 응답 변환·404·글 목록 호출 인자, 컨트롤러의 공개 여부와 role별 허용(`/me/role`은 PRE_REGISTER·PENDING도 가능, 나머지 `/me/*`는 USER·ADMIN만, 승인 대기 목록은 ADMIN만), 공개 프로필의 기본 크기 20과 `sort` 무시, 한글 닉네임 경로.
+4. 생성된 명세를 직접 열어 확인했다: `getPublicProfileByNickname`은 경로 `nickname`과 쿼리 `page`·`size`·`sort`, `UserPublicProfileResponse.posts`는 `title: PagedResponsePostListResponse`인 `allOf`, `getIntroList`의 기본 크기 10. 계약 시험이 6개 작업과 DTO를 프론트 계약과 비교해 통과한다. 접근 규칙 시험은 실제 `AppModule`의 새 라우트가 옛 접근 규칙 표와 같음을 비교한다.
+5. 변이 시험 79개(`sort` 해석, 날짜 형식, 정렬·쪽·개수·허용 목록, 응답 변환, 메시지·경로·공개 여부·role 허용, 모듈 등록, 명세 모양)를 돌려 77개를 시험이 잡았고, 원본은 해시로 복원을 확인했다. 살아남은 2개는 시험 데이터가 약해서였다: `id` 정렬이 `userId`로 바뀌어도, `createdAt` 정렬이 `updatedAt`으로 바뀌어도 통과했다(소개와 사용자를 같은 순서로 만들고 `updatedAt`을 `createdAt`과 같게 넣어서 두 컬럼의 순서가 같았다). 소개를 사용자와 반대 순서로 만들고 두 시각을 다르게 넣는 시험을 더해 둘 다 잡는 것을 확인했다. `parseSort` 시험 3개(끝 쉼표, `descending`, 공백뿐인 속성)는 첫 변이 목록을 쓰다가 살아남을 것으로 예상해 변이 시험 전에 더했다.
+6. 시험이 개발 DB에 남긴 것이 없다: 변이 시험과 전체 반복 실행 뒤에도 합계가 같다(users 15, posts 58, tags 45, post_tags 76, post_images 129, comments 35, likes 83, introductions 1, profile_images 15, repository 5). 시험 접두사(`intro_test_`, `user_q_test_` 등)의 행과 2099년 행은 0개다.
+7. 변경 파일 비밀 정보 검사: 해당 패턴 없음.
+
+**알게 된 함정**
+
+1. **`sort`의 속성 이름은 응답 필드가 아니라 엔티티 필드 이름이다.** 소개의 `introId`는 응답 이름이고 엔티티 필드는 `id`라서 `sort=introId`는 옛 서버에서도 없는 속성이었다. 요청에 `sort`가 있으면 기본 정렬을 더하지 않고 **바꾼다**(Spring Data 소스 `SortHandlerMethodArgumentResolver`로 확인). 처음 쓴 주석의 `속성:ignorecase` 문법은 틀렸고(실제는 끝 조각 `sort=content,asc,ignorecase`), 소스를 읽고 고쳤다.
+2. **소개 목록의 쪽 나누기는 글 목록과 다르다.** `findAll(pageable)`은 범위를 넘긴 쪽도 실제 전체 개수를 센다. 글 목록의 "빈 쪽이면 0"(28번)을 소개에까지 쓰면 틀린다.
+3. **날짜 형식이 둘이다.** 소개와 글은 Jackson의 `LocalDateTime`(소수점은 0이 아닌 자리까지), `UserProfileResponse`는 MapStruct `dateFormat`(초까지, 소수점 없음)이다. 둘 다 시험으로 고정했다.
+4. **닉네임 조회는 DB의 정렬 규칙을 따른다.** `utf8mb4_0900_ai_ci`라서 대소문자와 악센트를 구분하지 않고(`/public/profile/CAFE`가 `Café`를 찾는다), `NO PAD`라서 끝의 공백은 다른 값이다. 응답에는 저장된 닉네임이 나간다. 옛 `findByNickname`도 같은 DB 규칙이었다.
+5. **`ProfileCompletionInterceptor`는 등록되지 않았다**(`m2-auth-plan.md`). 그래서 가입을 끝내지 않은 사용자가 `/me/*`에서 막히지 않는 것이 아니라, 옛 접근 규칙(기본 USER·ADMIN)만 적용된다.
+6. **시험 데이터가 컬럼을 구분하지 못하면 변이가 살아남는다.** 같은 순서로 만든 데이터는 `id`/`userId`, `createdAt`/`updatedAt`을 바꿔도 통과한다. 정렬 시험의 데이터는 서로 다른 컬럼의 순서가 달라지게 만든다.
+7. **Express 5의 기본 쿼리 해석기는 `qs`가 아니라 `querystring`이다.** `?tags[]=a`는 `tags`가 아니라 `tags[]`라는 키로 온다. 처음에는 "Express가 `sort[]`를 배열로 합쳐 읽어서 Spring과 다르다"고 문서에 적었는데 틀렸다(`sort`는 Spring도 `sort[]`를 안 읽는다). HTTP로 확인하니 오히려 M5-1의 `tags[]=a,b`가 Spring과 달랐다(Spring 6.2의 `@RequestParam`은 `tags[]`를 읽고 우리는 필터를 무시했다). `readTags`로 고치고 컨트롤러 시험에 넣었다(프론트는 `tags=a&tags=b`로 보내서 화면 영향은 없었다). 옛 서버 버전은 `build.gradle`의 Spring Boot 3.4.0으로 확인하고(Spring Framework 6.2.0, Spring Data Commons 3.4.0), 두 태그의 소스를 읽었다.
+
+**알려진 차이**: 소개 목록의 `sort`는 `id`·`createdAt`·`updatedAt`·`content`만 받고 나머지는 500 `C004`다(옛 서버는 `user.nickname` 같은 연관 정렬과 `ignorecase`도 받았을 것이다). `sort` 값의 이중 URL 디코딩은 옮기지 않았다. 승인 대기 목록의 정렬(32번)과 좋아요 수의 행 수 세기(33번)는 옛 동작대로 옮겼다. 날짜의 소수점 아래 넷째 자리부터가 잘린다(D3). 현재 데이터에 소개는 1건, PENDING은 0명이다.
+
+**남은 것**: M5-4(내 댓글, 내 좋아요, `isPostLiked`). 옛 `userProfile`·`introsList`·`publicProfileAggregate` 캐시와 `userProfile`의 무효화는 M5-5와 M6에서 맞춘다. 전체 계약 비교와 복원 데이터 대조는 M5-6이다.
