@@ -2,7 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { PagedResponse } from '../../common/dto/paged-response.dto.js';
 import { BusinessException } from '../../common/error/business.exception.js';
 import { ErrorCode } from '../../common/error/error-code.js';
-import { toLocalDateTime } from '../../common/local-date-time.js';
+import {
+  kstWallClockNow,
+  toLocalDateTime,
+} from '../../common/local-date-time.js';
 import type { PageRequest } from '../../common/pageable.js';
 import { ReadCache } from '../../common/read-cache.js';
 import { buildCommentTree } from '../comment/comment-tree.js';
@@ -21,9 +24,6 @@ import {
 // 인기 글은 최근 1주 안에 쓴 글 중 3개다(옛 getWeeklyPopularPosts).
 const POPULAR_LIMIT = 3;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-// DB의 DATETIME에는 서울 벽시계 값이 들어 있다. 옛 LocalDateTime.now()와 같은 기준의 "지금"을 만들려고 9시간을 더한다.
-// prisma-user.repository.ts의 kstWallClockNow와 같은 규칙이다. 쓰는 곳이 셋이 되면 공용으로 뽑는다.
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 const toPostListResponse = (post: PostSummary): PostListResponse => ({
   postId: post.postId,
@@ -161,7 +161,7 @@ export class PostService {
   }
 
   private loadWeeklyPopularPosts(): Promise<PostPopularResponse[]> {
-    const since = new Date(Date.now() + KST_OFFSET_MS - WEEK_MS);
+    const since = new Date(kstWallClockNow().getTime() - WEEK_MS);
     return this.posts.findWeeklyPopularPosts(since, POPULAR_LIMIT);
   }
 

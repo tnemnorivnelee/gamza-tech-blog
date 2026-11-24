@@ -16,3 +16,9 @@ export function toLocalDateTime(date: Date): string {
 // 초 아래는 반올림하지 않고 버린다. 읽는 기준은 toLocalDateTime과 같다(DB의 벽시계 값을 Date의 UTC 필드로 읽는다).
 export const toLocalDateTimeSeconds = (date: Date): string =>
   date.toISOString().slice(0, 19);
+
+// DB의 DATETIME에는 시간대 정보가 없고 옛 서버는 한국 시간(KST) 벽시계 값을 그대로 넣었다(docs/m4-prisma-plan.md 4절, D7).
+// Prisma 어댑터는 Date의 UTC 필드를 그대로 DATETIME에 쓰고 읽는다(프로세스의 시간대와 무관하다). 그래서 옛 LocalDateTime.now()와
+// 같은 "지금"을 쓰려면 UTC 필드가 KST 시각이 되도록 9시간을 더한 Date를 넘긴다. created_at·updated_at 쓰기와 "최근 1주" 같은 비교가 쓴다.
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+export const kstWallClockNow = (): Date => new Date(Date.now() + KST_OFFSET_MS);
