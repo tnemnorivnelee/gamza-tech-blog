@@ -23,7 +23,7 @@ const toLikeResponse = (like: LikeSummary): LikeResponse => ({
 });
 
 // @Injectable: Nest가 만들어 다른 클래스의 생성자에 넣어 주는 부품이라는 표시다.
-// 옛 @Cacheable(myLikes)을 getMyLikes에 건다. 옛 코드는 unless가 없어서 빈 쪽도 저장했다.
+// 옛 @Cacheable(myLikes)을 getMyLikes에 건다. 옛 코드는 unless가 없어서 빈 쪽도 저장했다. 좋아요를 누르고 취소하는 쓰기는 캐시를 지운다.
 @Injectable()
 export class LikeService {
   constructor(
@@ -39,6 +39,36 @@ export class LikeService {
       `${githubId}-${page.page}-${page.size}`,
       () => this.loadMyLikes(githubId, page),
     );
+  }
+
+  // 글이 없으면 404 P001, 이미 눌렀으면 409 L001이다. 성공한 뒤에만 낡은 캐시를 지운다(옛 @Caching(evict)는 메서드가 예외 없이 끝나야 지웠다).
+  async likePost(githubId: string, postId: bigint): Promise<void> {
+    const result = await this.likes.addLike(githubId, postId);
+    if (result === 'POST_NOT_FOUND')
+      throw new BusinessException(ErrorCode.POST_NOT_FOUND);
+    if (result === 'ALREADY_LIKED')
+      throw new BusinessException(ErrorCode.ALREADY_LIKED);
+    await this.evictAfterWrite(postId);
+  }
+
+  // 글이 없으면 404 P001, 누른 적이 없으면 404 L002다. 캐시는 누를 때와 같은 것을 지운다.
+  async unlikePost(githubId: string, postId: bigint): Promise<void> {
+    const result = await this.likes.removeLike(githubId, postId);
+    if (result === 'POST_NOT_FOUND')
+      throw new BusinessException(ErrorCode.POST_NOT_FOUND);
+    if (result === 'LIKE_NOT_FOUND')
+      throw new BusinessException(ErrorCode.LIKE_NOT_FOUND);
+    await this.evictAfterWrite(postId);
+  }
+
+  // 글 상세에는 좋아요 수가 들어 있어서 그 글의 postDetail을 지우고, 사용자 누구의 좋아요 목록이든 바뀔 수 있어서 myLikes는 이름 전체를 지운다.
+  // 옛 코드가 지운 것은 이 둘뿐이다. 인기 글(hotPosts, 홈 피드에도 들어간다)은 좋아요 수로 순위를 매기는데도 지우지 않아서,
+  // 좋아요를 눌러도 순위는 만료(hotPosts 30분, 홈 피드 5분)가 올 때까지 그대로다(25번과 같은 뿌리다).
+  private async evictAfterWrite(postId: bigint): Promise<void> {
+    await Promise.all([
+      this.cache.evict('postDetail', String(postId)),
+      this.cache.evictAll('myLikes'),
+    ]);
   }
 
   // 글이 없으면 404 P001이다(옛 PostValidator.validatePostExists). 캐시가 없다.
