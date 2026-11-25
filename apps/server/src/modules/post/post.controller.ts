@@ -7,9 +7,8 @@ import {
 } from '@nestjs/swagger';
 import { Pageable } from '../../common/dto/pageable.dto.js';
 import { ResponseDto } from '../../common/dto/response.dto.js';
-import { ArgumentTypeMismatchException } from '../../common/error/input.exception.js';
 import { parsePageable } from '../../common/pageable.js';
-import { parseSpringLong } from '../../common/spring-compat.js';
+import { parsePathLong } from '../../common/spring-compat.js';
 import {
   ApiPageable,
   OkListOf,
@@ -139,7 +138,7 @@ export class PostController {
     return ResponseDto.of('홈 피드 조회 성공', feed);
   }
 
-  // 경로의 postId는 문자열로 받아 Spring의 Long 변환 규칙(parseSpringLong)으로 직접 읽는다. 숫자가 아니면 400 C005다.
+  // 경로의 postId는 문자열로 받아 Spring의 Long 변환 규칙(parsePathLong)으로 직접 읽는다. 숫자가 아니면 400 C005다.
   // 숫자 형식이면 글이 없을 때 404 P001이다. 명세에는 int64로 적는다(문자열로 받으면 Swagger가 string으로 적는다).
   @ApiOperation({ summary: '단일 게시물 상세 조회' })
   @Public()
@@ -147,12 +146,9 @@ export class PostController {
   @ApiParam({ name: 'postId', type: 'integer', format: 'int64' })
   @OkOf(PostDetailResponse)
   async getPostDetail(@Param('postId') postId: string) {
-    const id = parseSpringLong(postId);
-    if (id === undefined)
-      throw new ArgumentTypeMismatchException('postId', postId);
     return ResponseDto.of(
       '게시물 상세 조회 성공',
-      await this.posts.getPostDetail(id),
+      await this.posts.getPostDetail(parsePathLong('postId', postId)),
     );
   }
 }

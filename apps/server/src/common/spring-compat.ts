@@ -1,3 +1,5 @@
+import { ArgumentTypeMismatchException } from './error/input.exception.js';
+
 // 옛 Spring/Java가 요청 값과 문자열을 다루던 규칙을 그대로 옮긴 작은 함수들이다(docs/m5-read-api-plan.md 3.1).
 // JS의 기본 동작과 조금씩 달라서, 같은 입력에 같은 응답을 내려면 따로 맞춰야 한다.
 
@@ -51,6 +53,14 @@ export function parseSpringLong(text: string): bigint | undefined {
     return undefined;
   }
   return value >= INT64_MIN && value <= INT64_MAX ? value : undefined;
+}
+
+// 경로의 번호(@PathVariable Long)를 읽는다. 읽지 못하면 400 C005다(옛 MethodArgumentTypeMismatchException). 오류에 실리는 field는 경로 이름이다.
+// 글·좋아요·댓글·소개의 컨트롤러가 같은 규칙으로 번호를 읽어서 공용으로 뒀다.
+export function parsePathLong(name: string, raw: string): bigint {
+  const id = parseSpringLong(raw);
+  if (id === undefined) throw new ArgumentTypeMismatchException(name, raw);
+  return id;
 }
 
 const INT32_MIN = -(2 ** 31);
