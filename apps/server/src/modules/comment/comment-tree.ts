@@ -26,16 +26,27 @@ export function buildCommentTree(
     repliesOf.set(row.parentCommentId, siblings);
   }
 
-  const toResponse = (row: CommentRow): CommentResponse => ({
-    commentId: row.commentId,
-    writer: row.writer,
-    writerProfileImageUrl: row.writerProfileImageUrl,
-    content: row.content,
-    createdAt: toLocalDateTime(row.createdAt),
-    replies: (repliesOf.get(row.commentId) ?? [])
-      .toSorted((a, b) => a.commentId - b.commentId)
-      .map(toResponse),
-  });
+  const toResponse = (row: CommentRow): CommentResponse =>
+    toCommentResponse(
+      row,
+      (repliesOf.get(row.commentId) ?? [])
+        .toSorted((a, b) => a.commentId - b.commentId)
+        .map(toResponse),
+    );
 
   return rows.filter((row) => row.parentCommentId === null).map(toResponse);
 }
+
+// 댓글 한 줄을 응답 모양으로 바꾼다(옛 CommentMapper.mapToCommentTree의 한 단계). 답글은 호출하는 쪽이 만들어 넘긴다.
+// 방금 쓴 댓글의 응답도 이것을 쓴다: 답글이 아직 없어서 빈 목록이다.
+export const toCommentResponse = (
+  row: CommentRow,
+  replies: CommentResponse[],
+): CommentResponse => ({
+  commentId: row.commentId,
+  writer: row.writer,
+  writerProfileImageUrl: row.writerProfileImageUrl,
+  content: row.content,
+  createdAt: toLocalDateTime(row.createdAt),
+  replies,
+});

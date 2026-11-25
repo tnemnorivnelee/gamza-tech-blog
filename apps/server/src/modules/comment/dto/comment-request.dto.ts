@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 // 클래스 이름이 곧 스키마 이름이다(프론트 모델 이름과 같아야 한다).
-// class-validator 규칙(@NotBlank, @Size)은 컨트롤러를 옮길 때 옛 검증 위치를 확인한 뒤 붙인다.
+// 옛 컨트롤러에 @Valid가 없어서 @NotBlank·@Size(max = 1000)는 실제로 검사되지 않았다. 여기서도 검사하지 않고 명세에만 적는다.
 export class CommentRequest {
   @ApiProperty({
     type: 'string',

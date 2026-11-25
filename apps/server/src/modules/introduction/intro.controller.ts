@@ -1,13 +1,33 @@
-import { Controller, Get, Query } from '@nestjs/common';
-import { ApiOperation } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
+import { ApiBody, ApiOperation, ApiParam } from '@nestjs/swagger';
 import { ResponseDto } from '../../common/dto/response.dto.js';
 import {
   parsePageable,
   parseSort,
   type SortOrder,
 } from '../../common/pageable.js';
-import { ApiPageable, OkPagedOf } from '../../common/swagger/api-decorators.js';
+import { parsePathLong } from '../../common/spring-compat.js';
+import {
+  ApiPageable,
+  OkOf,
+  OkPagedOf,
+  OkVoid,
+} from '../../common/swagger/api-decorators.js';
 import { Public } from '../auth/access.decorator.js';
+import { CurrentUser } from '../auth/current-user.decorator.js';
+import type { User } from '../user/user.repository.js';
+import {
+  IntroCreateRequest,
+  validateIntroCreateRequest,
+} from './dto/intro-create-request.dto.js';
 import { IntroResponse } from './dto/intro-response.dto.js';
 import { IntroService } from './intro.service.js';
 
@@ -35,5 +55,36 @@ export class IntroController {
       parseSort(query, DEFAULT_SORT),
     );
     return ResponseDto.of('자기소개 목록 조회 성공', paged);
+  }
+
+  // 기본 규칙(로그인 필요, USER·ADMIN)이다. 요청 내용은 서비스에 가기 전에 검사한다(옛 @Valid): 위반하면 400 C001이다.
+  // 성공은 HTTP 200이고 본문 status만 201이다.
+  @ApiOperation({ summary: '자기소개 작성' })
+  @Post()
+  @ApiBody({ type: IntroCreateRequest })
+  @OkOf(IntroResponse)
+  async createIntro(
+    @CurrentUser() user: User,
+    @Body() body: IntroCreateRequest,
+  ) {
+    validateIntroCreateRequest(body);
+    const created = await this.intros.createIntro(user.githubId, body.content);
+    return ResponseDto.of('자기소개 작성 성공', created, 201);
+  }
+
+  // 없으면 404 IN002, 쓴 사람이 아니면 403 IN003이다. 소개 번호가 숫자가 아니면 400 C005다.
+  @ApiOperation({ summary: '자기소개 삭제' })
+  @Delete(':introId')
+  @ApiParam({ name: 'introId', type: 'integer', format: 'int64' })
+  @OkVoid()
+  async deleteIntro(
+    @CurrentUser() user: User,
+    @Param('introId') introId: string,
+  ) {
+    await this.intros.deleteIntro(
+      user.githubId,
+      parsePathLong('introId', introId),
+    );
+    return ResponseDto.of('자기소개 삭제 성공');
   }
 }
