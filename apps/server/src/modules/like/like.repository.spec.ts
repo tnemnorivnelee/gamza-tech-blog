@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
+import { kstWallClockNow } from '../../common/local-date-time.js';
 import type { PageRequest } from '../../common/pageable.js';
 import type { EnvironmentVariables } from '../../config/env.validation.js';
 import { PrismaService } from '../../infra/prisma/prisma.service.js';
@@ -426,6 +427,156 @@ describe.skipIf(!reachable)('LikeRepository (진짜 MySQL)', () => {
       await likeFor(me, post, at(5));
       await likeFor(me, post, at(6));
       expect(await repo.isPostLikedBy(me.githubId, post.postId)).toBe(true);
+    });
+  });
+
+  // 사용자와 글의 좋아요 행 수를 센다(저장소를 거치지 않고 직접 본다).
+  const likeRows = (user: { userId: bigint }, post: { postId: bigint }) =>
+    prisma.like.count({
+      where: { userId: user.userId, postId: post.postId },
+    });
+
+  describe('addLike', () => {
+    it('글이 없으면 POST_NOT_FOUND이고 아무것도 쓰지 않는다', async () => {
+      const me = await createUser();
+      expect(await repo.addLike(me.githubId, MISSING_POST_ID)).toBe(
+        'POST_NOT_FOUND',
+      );
+      expect(await prisma.like.count({ where: { userId: me.userId } })).toBe(0);
+    });
+
+    it('처음 누르면 ADDED이고 그 사용자와 글의 행이 하나 생긴다', async () => {
+      const me = await createUser();
+      const post = await createPost(await createUser());
+      expect(await repo.addLike(me.githubId, post.postId)).toBe('ADDED');
+      expect(await likeRows(me, post)).toBe(1);
+    });
+
+    // DB 기본값이 없어서 코드가 시각을 채운다. 서울 벽시계 값(UTC 필드)이라 지금의 kstWallClockNow와 몇 초 안에 있어야 한다.
+    it('만든 시각과 고친 시각이 같고 서울 벽시계 값의 지금이다', async () => {
+      const me = await createUser();
+      const post = await createPost(await createUser());
+      await repo.addLike(me.githubId, post.postId);
+      const row = await prisma.like.findFirstOrThrow({
+        where: { userId: me.userId, postId: post.postId },
+      });
+      expect(row.updatedAt).toEqual(row.createdAt);
+      expect(
+        Math.abs(row.createdAt.getTime() - kstWallClockNow().getTime()),
+      ).toBeLessThan(10_000);
+    });
+
+    it('이미 눌렀으면 ALREADY_LIKED이고 행을 더 만들지 않는다', async () => {
+      const me = await createUser();
+      const post = await createPost(await createUser());
+      await likeFor(me, post, at(5));
+      expect(await repo.addLike(me.githubId, post.postId)).toBe(
+        'ALREADY_LIKED',
+      );
+      expect(await likeRows(me, post)).toBe(1);
+    });
+
+    it('다른 사용자가 누른 글도 나는 누를 수 있다', async () => {
+      const me = await createUser();
+      const other = await createUser();
+      const post = await createPost(await createUser());
+      await likeFor(other, post, at(5));
+      expect(await repo.addLike(me.githubId, post.postId)).toBe('ADDED');
+      expect(await likeRows(me, post)).toBe(1);
+      expect(await likeRows(other, post)).toBe(1);
+    });
+
+    it('내가 다른 글에 누른 좋아요는 이 글과 상관없다', async () => {
+      const me = await createUser();
+      const author = await createUser();
+      const liked = await createPost(author);
+      const target = await createPost(author);
+      await likeFor(me, liked, at(5));
+      expect(await repo.addLike(me.githubId, target.postId)).toBe('ADDED');
+    });
+
+    // 옛 findByUserAndPost는 행이 둘 이상이면 IncorrectResultSizeDataAccessException(500)이었다.
+    it('같은 글에 내 좋아요 행이 이미 둘이면 던지고 행을 건드리지 않는다', async () => {
+      const me = await createUser();
+      const post = await createPost(await createUser());
+      await likeFor(me, post, at(5));
+      await likeFor(me, post, at(6));
+      await expect(repo.addLike(me.githubId, post.postId)).rejects.toThrow();
+      expect(await likeRows(me, post)).toBe(2);
+    });
+
+    // 좋아요를 누른 뒤 목록 읽기(findMyLikePage)에서 그 글이 나온다. 쓰기와 읽기가 같은 행을 본다는 증거다.
+    it('누른 글이 내 좋아요 목록과 isPostLikedBy에 나타난다', async () => {
+      const me = await createUser();
+      const post = await createPost(await createUser(), { title: '보이는 글' });
+      await repo.addLike(me.githubId, post.postId);
+      expect(titles(await repo.findMyLikePage(me.githubId, first()))).toEqual([
+        '보이는 글',
+      ]);
+      expect(await repo.isPostLikedBy(me.githubId, post.postId)).toBe(true);
+    });
+  });
+
+  describe('removeLike', () => {
+    it('글이 없으면 POST_NOT_FOUND다', async () => {
+      const me = await createUser();
+      expect(await repo.removeLike(me.githubId, MISSING_POST_ID)).toBe(
+        'POST_NOT_FOUND',
+      );
+    });
+
+    it('누른 적이 없으면 LIKE_NOT_FOUND다', async () => {
+      const me = await createUser();
+      const post = await createPost(await createUser());
+      expect(await repo.removeLike(me.githubId, post.postId)).toBe(
+        'LIKE_NOT_FOUND',
+      );
+    });
+
+    it('눌렀으면 REMOVED이고 그 행이 사라진다', async () => {
+      const me = await createUser();
+      const post = await createPost(await createUser());
+      await likeFor(me, post, at(5));
+      expect(await repo.removeLike(me.githubId, post.postId)).toBe('REMOVED');
+      expect(await likeRows(me, post)).toBe(0);
+      expect(await repo.isPostLikedBy(me.githubId, post.postId)).toBe(false);
+    });
+
+    it('다른 사용자의 좋아요와 내가 다른 글에 누른 좋아요는 남긴다', async () => {
+      const me = await createUser();
+      const other = await createUser();
+      const author = await createUser();
+      const target = await createPost(author);
+      const another = await createPost(author);
+      await likeFor(me, target, at(5));
+      await likeFor(other, target, at(6));
+      await likeFor(me, another, at(7));
+
+      expect(await repo.removeLike(me.githubId, target.postId)).toBe('REMOVED');
+
+      expect(await likeRows(me, target)).toBe(0);
+      expect(await likeRows(other, target)).toBe(1);
+      expect(await likeRows(me, another)).toBe(1);
+    });
+
+    it('다른 사용자만 눌렀다면 나는 LIKE_NOT_FOUND다', async () => {
+      const me = await createUser();
+      const other = await createUser();
+      const post = await createPost(await createUser());
+      await likeFor(other, post, at(5));
+      expect(await repo.removeLike(me.githubId, post.postId)).toBe(
+        'LIKE_NOT_FOUND',
+      );
+      expect(await likeRows(other, post)).toBe(1);
+    });
+
+    it('내 좋아요 행이 둘이면 던지고 행을 건드리지 않는다(옛 동작)', async () => {
+      const me = await createUser();
+      const post = await createPost(await createUser());
+      await likeFor(me, post, at(5));
+      await likeFor(me, post, at(6));
+      await expect(repo.removeLike(me.githubId, post.postId)).rejects.toThrow();
+      expect(await likeRows(me, post)).toBe(2);
     });
   });
 });

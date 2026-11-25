@@ -52,7 +52,7 @@ apps/server/src/
                      swagger/ (setup, @Ok* decorators)
                      pageable.ts, local-date-time.ts, spring-compat.ts (request parsing and date
                      formatting that reproduce the old Spring/Jackson behavior)
-                     read-cache.ts, read-cache.module.ts (Redis read cache that reproduces the old @Cacheable)
+                     read-cache.ts, read-cache.module.ts (Redis read cache that reproduces the old @Cacheable and @CacheEvict)
   modules/<domain>/  one Nest module per old domain; controller -> service -> repository; dto/
   infra/             prisma/ and redis/ (connection only; queries, key names and commands live with the caller, e.g. modules/user, modules/auth);
                      (planned) storage, gemini, github

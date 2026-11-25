@@ -139,3 +139,92 @@ describe('ReadCache.cached', () => {
     });
   });
 });
+
+// 옛 @CacheEvict: 쓰기가 성공한 뒤 낡은 값을 지운다. 지운 뒤 읽으면 다시 읽어 와서 새 값이 저장된다.
+describe('ReadCache.evict', () => {
+  it('그 이름과 키만 지우고 다른 키·다른 이름은 그대로 둔다', async () => {
+    const { cache, redis } = createReadCache();
+    await cache.cached('postDetail', '1', () => Promise.resolve('a'));
+    await cache.cached('postDetail', '2', () => Promise.resolve('b'));
+    await cache.cached('myLikes', '1', () => Promise.resolve('c'));
+
+    await cache.evict('postDetail', '1');
+
+    expect([...redis.values.keys()].sort()).toEqual([
+      'cache:myLikes:1',
+      'cache:postDetail:2',
+    ]);
+  });
+
+  it('없는 키를 지워도 오류가 아니다', async () => {
+    const { cache } = createReadCache();
+    await expect(cache.evict('postDetail', '404')).resolves.toBeUndefined();
+  });
+
+  it('지운 뒤 읽으면 읽어 오는 함수를 다시 부른다', async () => {
+    const { cache } = createReadCache();
+    const load = vi.fn().mockResolvedValueOnce('old').mockResolvedValue('new');
+    expect(await cache.cached('postDetail', '1', load)).toBe('old');
+    await cache.evict('postDetail', '1');
+    expect(await cache.cached('postDetail', '1', load)).toBe('new');
+  });
+
+  it('Redis 오류는 삼키지 않고 던진다', async () => {
+    const redis = new FakeRedis();
+    redis.del.mockRejectedValue(new Error('redis down'));
+    const cache = new ReadCache(redis.asRedis());
+    await expect(cache.evict('postDetail', '1')).rejects.toThrow('redis down');
+  });
+});
+
+describe('ReadCache.evictAll', () => {
+  it('그 이름의 키를 모두 지우고 다른 이름의 키는 그대로 둔다', async () => {
+    const { cache, redis } = createReadCache();
+    await cache.cached('myLikes', 'octo-0-10', () => Promise.resolve(1));
+    await cache.cached('myLikes', 'boss-0-10', () => Promise.resolve(2));
+    await cache.cached('postDetail', '1', () => Promise.resolve(3));
+
+    await cache.evictAll('myLikes');
+
+    expect([...redis.values.keys()]).toEqual(['cache:postDetail:1']);
+  });
+
+  // 가짜 SCAN은 두 개씩 끊어 준다. 다섯 키를 모두 지우면 커서를 끝까지 따라간 것이다.
+  it('SCAN이 나눠 주는 쪽을 끝까지 따라가며 지운다', async () => {
+    const { cache, redis } = createReadCache();
+    for (const n of [1, 2, 3, 4, 5])
+      await cache.cached('myLikes', `u${n}`, () => Promise.resolve(n));
+    await cache.cached('postDetail', '1', () => Promise.resolve(0));
+
+    await cache.evictAll('myLikes');
+
+    expect([...redis.values.keys()]).toEqual(['cache:postDetail:1']);
+    expect(redis.scan.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  // 이름 뒤의 ':'까지 맞춘다. 캐시가 아닌 키(로그인 토큰 등)는 접두사가 달라 걸리지 않는다.
+  it("패턴은 'cache:<이름>:*'이다", async () => {
+    const { cache, redis } = createReadCache();
+    await cache.evictAll('introsList');
+    expect(redis.scan).toHaveBeenCalledWith(
+      '0',
+      'MATCH',
+      'cache:introsList:*',
+      'COUNT',
+      expect.any(Number),
+    );
+  });
+
+  it('지울 키가 없으면 지우기 명령을 부르지 않는다', async () => {
+    const { cache, redis } = createReadCache();
+    await cache.evictAll('myLikes');
+    expect(redis.del).not.toHaveBeenCalled();
+  });
+
+  it('Redis 오류는 삼키지 않고 던진다', async () => {
+    const redis = new FakeRedis();
+    redis.scan.mockRejectedValue(new Error('redis down'));
+    const cache = new ReadCache(redis.asRedis());
+    await expect(cache.evictAll('myLikes')).rejects.toThrow('redis down');
+  });
+});

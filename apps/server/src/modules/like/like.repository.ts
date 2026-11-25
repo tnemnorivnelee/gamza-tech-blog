@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { kstWallClockNow } from '../../common/local-date-time.js';
 import type { PageRequest } from '../../common/pageable.js';
 import { PrismaService } from '../../infra/prisma/prisma.service.js';
 
@@ -23,7 +24,11 @@ export interface LikePage {
   readonly totalElements: number;
 }
 
-// 좋아요의 MySQL 구현이다(옛 LikeQueryAdapter와 LikeRepository.existsByUserAndPost). Prisma는 이런 *.repository.ts에서만 import한다.
+// 좋아요 추가·취소의 결과다. 서비스가 이것을 보고 어떤 오류를 던질지 정한다(옛 PostValidator와 LikeValidator의 검사 순서와 같다).
+export type AddLikeResult = 'ADDED' | 'POST_NOT_FOUND' | 'ALREADY_LIKED';
+export type RemoveLikeResult = 'REMOVED' | 'POST_NOT_FOUND' | 'LIKE_NOT_FOUND';
+
+// 좋아요의 MySQL 구현이다(옛 LikeQueryAdapter, LikeJpaRepository의 existsByUserAndPost·findByUserAndPost·deleteByUserAndPost, saveLike). Prisma는 이런 *.repository.ts에서만 import한다.
 // 바꿔 끼울 구현이 없어서 추상 클래스 없이 클래스 하나다. 시험은 이 클래스를 진짜 MySQL로 확인한다.
 @Injectable()
 export class LikeRepository {
@@ -95,6 +100,59 @@ export class LikeRepository {
         };
       }),
     };
+  }
+
+  // 좋아요를 누른다. 글이 없으면 POST_NOT_FOUND, 이미 눌렀으면 ALREADY_LIKED다(옛 likePost: 글 확인, 중복 확인, 저장 순서).
+  // 읽고 나서 쓰는 두 단계라서 같은 사용자가 동시에 두 번 누르면 둘 다 통과해 행이 둘 생길 수 있다. 옛 서버도 같았고(유일 제약이 없다) 33번에 적었다.
+  async addLike(githubId: string, postId: bigint): Promise<AddLikeResult> {
+    const existing = await this.countMyLike(githubId, postId);
+    if (existing === null) return 'POST_NOT_FOUND';
+    if (existing === 1) return 'ALREADY_LIKED';
+    const now = kstWallClockNow();
+    // created_at·updated_at은 DB 기본값이 없어서 코드가 채운다(옛 BaseTime의 @CreatedDate·@LastModifiedDate).
+    await this.prisma.like.create({
+      data: {
+        createdAt: now,
+        updatedAt: now,
+        user: { connect: { githubId } },
+        post: { connect: { postId } },
+      },
+    });
+    return 'ADDED';
+  }
+
+  // 좋아요를 취소한다. 글이 없으면 POST_NOT_FOUND, 누른 적이 없으면 LIKE_NOT_FOUND다(옛 unlikePost: 글 확인, 존재 확인, 삭제 순서).
+  async removeLike(
+    githubId: string,
+    postId: bigint,
+  ): Promise<RemoveLikeResult> {
+    const existing = await this.countMyLike(githubId, postId);
+    if (existing === null) return 'POST_NOT_FOUND';
+    if (existing === 0) return 'LIKE_NOT_FOUND';
+    await this.prisma.like.deleteMany({
+      where: { post: { postId }, user: { githubId } },
+    });
+    return 'REMOVED';
+  }
+
+  // 옛 findByUserAndPost(Optional)와 같다: 글이 없으면 null, 좋아요가 없으면 0, 있으면 1이다.
+  // 같은 (사용자, 글)의 행이 둘 이상이면 옛 Spring이 IncorrectResultSizeDataAccessException을 던져 500이었다. 여기서도 던진다(전역 필터가 500 C004로 바꾼다).
+  // 이 상태는 동시에 두 번 눌렀을 때만 생긴다(개발 DB에는 없다). 한 번 생기면 누르기도 취소도 안 된다. 옛 동작이라 그대로 두고 33번에 적었다.
+  private async countMyLike(
+    githubId: string,
+    postId: bigint,
+  ): Promise<0 | 1 | null> {
+    const post = await this.prisma.post.findUnique({
+      where: { postId },
+      select: {
+        _count: { select: { likes: { where: { user: { githubId } } } } },
+      },
+    });
+    if (post === null) return null;
+    const count = post._count.likes;
+    if (count > 1)
+      throw new Error('같은 사용자와 글의 좋아요 행이 둘 이상이다');
+    return count === 1 ? 1 : 0;
   }
 
   // 글이 없으면 null, 있으면 내가 좋아요를 눌렀는지다. 옛 코드는 글을 먼저 찾고(없으면 404) 좋아요 행을 따로 확인했다.

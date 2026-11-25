@@ -44,6 +44,8 @@ async function createApp() {
   const service = {
     getMyLikes: vi.fn().mockResolvedValue(PAGE),
     isPostLiked: vi.fn().mockResolvedValue(true),
+    likePost: vi.fn().mockResolvedValue(undefined),
+    unlikePost: vi.fn().mockResolvedValue(undefined),
   };
   const moduleRef = await Test.createTestingModule({
     imports: [
@@ -74,10 +76,18 @@ async function createApp() {
     const res = await fetch(`${baseUrl}${path}`, { headers });
     return { status: res.status, body: await res.json() };
   };
+  const send = async (
+    method: 'POST' | 'DELETE',
+    path: string,
+    headers: Record<string, string> = {},
+  ) => {
+    const res = await fetch(`${baseUrl}${path}`, { method, headers });
+    return { status: res.status, body: await res.json() };
+  };
   const bearer = (githubId: string) => ({
     authorization: `Bearer ${moduleRef.get(JwtTokenService).createAccessToken(githubId)}`,
   });
-  return { app, service, get, bearer };
+  return { app, service, get, send, bearer };
 }
 
 type TestApp = Awaited<ReturnType<typeof createApp>>;
@@ -256,6 +266,172 @@ describe('좋아요 읽기 API', () => {
         expect(res.status).toBe(403);
         expect(res.body).toMatchObject({ data: 'J005' });
         expect(t.service.isPostLiked).not.toHaveBeenCalled();
+      },
+    );
+  });
+});
+
+describe('좋아요 쓰기 API', () => {
+  let t: TestApp;
+
+  beforeAll(async () => {
+    t = await createApp();
+  });
+
+  afterAll(() => t.app.close());
+
+  beforeEach(() => vi.clearAllMocks());
+
+  describe('POST /api/v1/likes/{postId}', () => {
+    it('토큰이 없으면 403 J004다', async () => {
+      const res = await t.send('POST', '/api/v1/likes/7');
+      expect(res.status).toBe(403);
+      expect(res.body).toMatchObject({ data: 'J004' });
+      expect(t.service.likePost).not.toHaveBeenCalled();
+    });
+
+    // 옛 ResponseDto.of(HttpStatus.CREATED, "좋아요 추가 성공")이다: HTTP는 200이고 본문 status만 201이며 data 키가 없다.
+    it('로그인한 사용자의 githubId와 글 번호로 누르고, HTTP 200에 본문 status 201과 옛 메시지를 준다(data 없음)', async () => {
+      const res = await t.send('POST', '/api/v1/likes/7', t.bearer('octo'));
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        status: 201,
+        message: '좋아요 추가 성공',
+        timestamp: expect.any(Number),
+      });
+      expect(res.body).not.toHaveProperty('data');
+      expect(t.service.likePost).toHaveBeenCalledWith('octo', 7n);
+    });
+
+    it('ADMIN도 누를 수 있다', async () => {
+      const res = await t.send('POST', '/api/v1/likes/7', t.bearer('boss'));
+      expect(res.status).toBe(200);
+      expect(t.service.likePost).toHaveBeenCalledWith('boss', 7n);
+    });
+
+    it('없는 글이면 서비스가 던진 404 P001이 그대로 나간다', async () => {
+      t.service.likePost.mockRejectedValueOnce(
+        new BusinessException(ErrorCode.POST_NOT_FOUND),
+      );
+      const res = await t.send('POST', '/api/v1/likes/999', t.bearer('octo'));
+      expect(res.status).toBe(404);
+      expect(res.body).toMatchObject({ status: 404, code: 'P001' });
+    });
+
+    it('이미 눌렀으면 서비스가 던진 409 L001이 그대로 나간다', async () => {
+      t.service.likePost.mockRejectedValueOnce(
+        new BusinessException(ErrorCode.ALREADY_LIKED),
+      );
+      const res = await t.send('POST', '/api/v1/likes/7', t.bearer('octo'));
+      expect(res.status).toBe(409);
+      expect(res.body).toMatchObject({ status: 409, code: 'L001' });
+    });
+
+    // 글 번호는 좋아요 여부 조회와 같은 규칙으로 읽는다. 'me'는 GET에만 목록 조회 경로가 있고 POST에서는 글 번호가 아니다.
+    it.each([
+      ['0x10', 16n],
+      ['%2023', 23n],
+    ])('글 번호 %s를 %s로 읽는다', async (raw, expected) => {
+      const res = await t.send(
+        'POST',
+        `/api/v1/likes/${raw}`,
+        t.bearer('octo'),
+      );
+      expect(res.status).toBe(200);
+      expect(t.service.likePost).toHaveBeenCalledWith('octo', expected);
+    });
+
+    it.each(['abc', 'me', '1.5', '9223372036854775808', '12abc'])(
+      '글 번호가 숫자가 아니거나 범위 밖이면(%s) 400 C005다',
+      async (raw) => {
+        const res = await t.send(
+          'POST',
+          `/api/v1/likes/${raw}`,
+          t.bearer('octo'),
+        );
+        expect(res.status).toBe(400);
+        expect(res.body).toMatchObject({
+          status: 400,
+          code: 'C005',
+          errors: [{ field: 'postId', value: raw, reason: 'typeMismatch' }],
+        });
+        expect(t.service.likePost).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(['waiting', 'newbie'])(
+      '%s(PENDING·PRE_REGISTER)는 403 J005다',
+      async (id) => {
+        const res = await t.send('POST', '/api/v1/likes/7', t.bearer(id));
+        expect(res.status).toBe(403);
+        expect(res.body).toMatchObject({ data: 'J005' });
+        expect(t.service.likePost).not.toHaveBeenCalled();
+      },
+    );
+  });
+
+  describe('DELETE /api/v1/likes/{postId}', () => {
+    it('토큰이 없으면 403 J004다', async () => {
+      const res = await t.send('DELETE', '/api/v1/likes/7');
+      expect(res.status).toBe(403);
+      expect(res.body).toMatchObject({ data: 'J004' });
+      expect(t.service.unlikePost).not.toHaveBeenCalled();
+    });
+
+    it('로그인한 사용자의 githubId와 글 번호로 취소하고, 본문 status 200과 옛 메시지를 준다(data 없음)', async () => {
+      const res = await t.send('DELETE', '/api/v1/likes/7', t.bearer('octo'));
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        status: 200,
+        message: '좋아요 취소 성공',
+        timestamp: expect.any(Number),
+      });
+      expect(res.body).not.toHaveProperty('data');
+      expect(t.service.unlikePost).toHaveBeenCalledWith('octo', 7n);
+    });
+
+    it('없는 글이면 404 P001, 누른 적이 없으면 404 L002가 그대로 나간다', async () => {
+      t.service.unlikePost.mockRejectedValueOnce(
+        new BusinessException(ErrorCode.POST_NOT_FOUND),
+      );
+      t.service.unlikePost.mockRejectedValueOnce(
+        new BusinessException(ErrorCode.LIKE_NOT_FOUND),
+      );
+      const noPost = await t.send(
+        'DELETE',
+        '/api/v1/likes/999',
+        t.bearer('octo'),
+      );
+      const noLike = await t.send(
+        'DELETE',
+        '/api/v1/likes/7',
+        t.bearer('octo'),
+      );
+      expect(noPost.body).toMatchObject({ status: 404, code: 'P001' });
+      expect(noLike.body).toMatchObject({ status: 404, code: 'L002' });
+    });
+
+    it.each(['abc', 'me', '12abc'])(
+      '글 번호가 숫자가 아니면(%s) 400 C005다',
+      async (raw) => {
+        const res = await t.send(
+          'DELETE',
+          `/api/v1/likes/${raw}`,
+          t.bearer('octo'),
+        );
+        expect(res.status).toBe(400);
+        expect(res.body).toMatchObject({ status: 400, code: 'C005' });
+        expect(t.service.unlikePost).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(['waiting', 'newbie'])(
+      '%s(PENDING·PRE_REGISTER)는 403 J005다',
+      async (id) => {
+        const res = await t.send('DELETE', '/api/v1/likes/7', t.bearer(id));
+        expect(res.status).toBe(403);
+        expect(res.body).toMatchObject({ data: 'J005' });
+        expect(t.service.unlikePost).not.toHaveBeenCalled();
       },
     );
   });

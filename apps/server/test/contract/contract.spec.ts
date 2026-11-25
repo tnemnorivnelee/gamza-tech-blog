@@ -26,6 +26,8 @@ const TRIAL = {
     'getMyComments',
     'getMyLikes',
     'isPostLiked',
+    'likePost',
+    'unlikePost',
     'delete',
     'reissue',
     'logout',
