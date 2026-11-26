@@ -23,6 +23,8 @@ const TRIAL = {
   operations: [
     'addComment',
     'deleteComment',
+    'createIntro',
+    'deleteIntro',
     'getMyComments',
     'getMyLikes',
     'isPostLiked',

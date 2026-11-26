@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import { BusinessException } from '../../common/error/business.exception.js';
 import { ErrorCode } from '../../common/error/error-code.js';
+import { kstWallClockNow } from '../../common/local-date-time.js';
 import type { PageRequest, SortOrder } from '../../common/pageable.js';
 import type { EnvironmentVariables } from '../../config/env.validation.js';
 import { PrismaService } from '../../infra/prisma/prisma.service.js';
@@ -42,12 +43,15 @@ describe.skipIf(!reachable)('CommentRepository (진짜 MySQL)', () => {
   afterEach(async () => {
     const mine = { githubId: { startsWith: PREFIX } };
     const ofMine = { OR: [{ user: mine }, { post: { user: mine } }] };
-    // 답글(대댓글)이 부모 댓글을 가리키는 외래 키가 있어서 답글부터 지운다.
-    await prisma.comment.deleteMany({
-      where: { ...ofMine, parentCommentId: { not: null } },
-    });
-    await prisma.comment.deleteMany({ where: ofMine });
+    // 답글(대댓글)이 부모 댓글을 가리키는 외래 키가 있어서, 답글이 없는 댓글(맨 아래)부터 층별로 지운다. 여러 층이어도 끝까지 반복한다.
+    for (;;) {
+      const { count } = await prisma.comment.deleteMany({
+        where: { ...ofMine, replies: { none: {} } },
+      });
+      if (count === 0) break;
+    }
     await prisma.post.deleteMany({ where: { user: mine } });
+    await prisma.profileImage.deleteMany({ where: { user: mine } });
     await prisma.repository.deleteMany({ where: { user: mine } });
     await prisma.user.deleteMany({ where: mine });
   });
@@ -317,6 +321,320 @@ describe.skipIf(!reachable)('CommentRepository (진짜 MySQL)', () => {
         DEFAULT,
       );
       expect(page).toEqual({ comments: [], totalElements: 5 });
+    });
+  });
+
+  // 쓰기 시험의 준비물: 사용자 둘과 글 하나. 프로필 이미지는 필요할 때만 만든다.
+  async function writeSetup() {
+    const me = await createUser();
+    const other = await createUser();
+    const post = await createPost(other);
+    return { me, other, post };
+  }
+
+  const rowsOf = (post: { postId: bigint }) =>
+    prisma.comment.findMany({
+      where: { postId: post.postId },
+      orderBy: { commentId: 'asc' },
+    });
+
+  describe('createComment', () => {
+    it('글이 없으면 POST_NOT_FOUND이고 아무것도 쓰지 않는다', async () => {
+      const { me } = await writeSetup();
+      const result = await repo.createComment(
+        me.githubId,
+        987654321012n,
+        '내용',
+        null,
+      );
+      expect(result).toEqual({ status: 'POST_NOT_FOUND' });
+      expect(await prisma.comment.count({ where: { userId: me.userId } })).toBe(
+        0,
+      );
+    });
+
+    it('최상위 댓글을 쓰면 CREATED와 만든 댓글(작성자 닉네임, 이미지 없음은 null, 부모 없음)을 준다', async () => {
+      const { me, post } = await writeSetup();
+      const result = await repo.createComment(
+        me.githubId,
+        post.postId,
+        '첫 댓글',
+        null,
+      );
+      expect(result.status).toBe('CREATED');
+      if (result.status !== 'CREATED') return;
+      expect(result.comment).toMatchObject({
+        parentCommentId: null,
+        writer: me.nickname,
+        writerProfileImageUrl: null,
+        content: '첫 댓글',
+      });
+      const [row] = await rowsOf(post);
+      expect(row).toMatchObject({
+        commentId: BigInt(result.comment.commentId),
+        userId: me.userId,
+        parentCommentId: null,
+        content: '첫 댓글',
+      });
+    });
+
+    it('작성자의 프로필 이미지 주소를 준다', async () => {
+      const { me, post } = await writeSetup();
+      await prisma.profileImage.create({
+        data: {
+          profileImageUrl: 'https://img.test/me.png',
+          userId: me.userId,
+          createdAt: NOW,
+          updatedAt: NOW,
+        },
+      });
+      const result = await repo.createComment(
+        me.githubId,
+        post.postId,
+        '내용',
+        null,
+      );
+      expect(result).toMatchObject({
+        status: 'CREATED',
+        comment: { writerProfileImageUrl: 'https://img.test/me.png' },
+      });
+    });
+
+    // 옛 컨트롤러에 @Valid가 없어서 검사하지 않았다. 빈 내용도, 1000자를 넘는 내용도 저장된다.
+    it.each([
+      ['빈 문자열', ''],
+      ['공백만', '   '],
+      ['1001자', '가'.repeat(1001)],
+    ])('내용이 %s이어도 저장한다', async (_label, content) => {
+      const { me, post } = await writeSetup();
+      const result = await repo.createComment(
+        me.githubId,
+        post.postId,
+        content,
+        null,
+      );
+      expect(result.status).toBe('CREATED');
+      expect((await rowsOf(post))[0].content).toBe(content);
+    });
+
+    // 내용이 아예 없으면 DB의 NOT NULL이 막는다(옛 Hibernate의 nullable = false). 던지고 아무것도 쓰지 않는다.
+    it('내용이 없으면 던지고 아무것도 쓰지 않는다', async () => {
+      const { me, post } = await writeSetup();
+      await expect(
+        repo.createComment(
+          me.githubId,
+          post.postId,
+          undefined as unknown as string,
+          null,
+        ),
+      ).rejects.toThrow();
+      expect(await rowsOf(post)).toEqual([]);
+    });
+
+    // DB에 DATETIME 기본값이 없어서 코드가 채운다. 서울 벽시계 값(UTC 필드)의 지금이고 두 값이 같다.
+    it('만든 시각과 고친 시각이 같고 서울 벽시계 값의 지금이다', async () => {
+      const { me, post } = await writeSetup();
+      await repo.createComment(me.githubId, post.postId, '시각', null);
+      const [row] = await rowsOf(post);
+      expect(row.updatedAt).toEqual(row.createdAt);
+      expect(
+        Math.abs(row.createdAt.getTime() - kstWallClockNow().getTime()),
+      ).toBeLessThan(10_000);
+    });
+
+    it('같은 글의 댓글에 답글을 달면 부모 번호가 붙는다', async () => {
+      const { me, other, post } = await writeSetup();
+      const parent = await commentFor(other, post, '부모', at(5));
+      const result = await repo.createComment(
+        me.githubId,
+        post.postId,
+        '답글',
+        parent.commentId,
+      );
+      expect(result).toMatchObject({
+        status: 'CREATED',
+        comment: { parentCommentId: Number(parent.commentId) },
+      });
+      expect((await rowsOf(post)).map((row) => row.parentCommentId)).toEqual([
+        null,
+        parent.commentId,
+      ]);
+    });
+
+    it('답글에도 답글을 달 수 있다(깊이에 제한이 없다)', async () => {
+      const { me, other, post } = await writeSetup();
+      const top = await commentFor(other, post, '최상위', at(5));
+      const reply = await commentFor(other, post, '답글', at(6), {
+        parentCommentId: top.commentId,
+      });
+      const result = await repo.createComment(
+        me.githubId,
+        post.postId,
+        '답답글',
+        reply.commentId,
+      );
+      expect(result.status).toBe('CREATED');
+    });
+
+    it('부모 댓글이 없으면 PARENT_NOT_FOUND이고 아무것도 쓰지 않는다', async () => {
+      const { me, post } = await writeSetup();
+      const result = await repo.createComment(
+        me.githubId,
+        post.postId,
+        '내용',
+        987654321012n,
+      );
+      expect(result).toEqual({ status: 'PARENT_NOT_FOUND' });
+      expect(await rowsOf(post)).toEqual([]);
+    });
+
+    it('부모 댓글이 다른 글의 것이면 PARENT_OF_OTHER_POST이고 아무것도 쓰지 않는다', async () => {
+      const { me, other, post } = await writeSetup();
+      const elsewhere = await createPost(other);
+      const parent = await commentFor(
+        other,
+        elsewhere,
+        '다른 글의 댓글',
+        at(5),
+      );
+      const result = await repo.createComment(
+        me.githubId,
+        post.postId,
+        '내용',
+        parent.commentId,
+      );
+      expect(result).toEqual({ status: 'PARENT_OF_OTHER_POST' });
+      expect(await rowsOf(post)).toEqual([]);
+    });
+
+    // 글이 없는 것이 부모 검사보다 먼저다(옛 createComment의 검사 순서).
+    it('글도 없고 부모도 없으면 글 쪽 오류가 먼저다', async () => {
+      const { me } = await writeSetup();
+      const result = await repo.createComment(
+        me.githubId,
+        987654321012n,
+        '내용',
+        987654321013n,
+      );
+      expect(result).toEqual({ status: 'POST_NOT_FOUND' });
+    });
+
+    it('같은 사용자가 같은 글에 여러 번 달 수 있다', async () => {
+      const { me, post } = await writeSetup();
+      await repo.createComment(me.githubId, post.postId, '하나', null);
+      await repo.createComment(me.githubId, post.postId, '둘', null);
+      expect((await rowsOf(post)).map((row) => row.content)).toEqual([
+        '하나',
+        '둘',
+      ]);
+    });
+  });
+
+  describe('deleteComment', () => {
+    it('댓글이 없으면 COMMENT_NOT_FOUND다', async () => {
+      const { me } = await writeSetup();
+      expect(await repo.deleteComment(me.githubId, 987654321012n)).toEqual({
+        status: 'COMMENT_NOT_FOUND',
+      });
+    });
+
+    it('남의 댓글이면 FORBIDDEN이고 지우지 않는다', async () => {
+      const { me, other, post } = await writeSetup();
+      const theirs = await commentFor(other, post, '남의 댓글', at(5));
+      expect(await repo.deleteComment(me.githubId, theirs.commentId)).toEqual({
+        status: 'FORBIDDEN',
+      });
+      expect(await rowsOf(post)).toHaveLength(1);
+    });
+
+    it('내 댓글이면 DELETED와 그 댓글이 달린 글의 번호를 주고 행이 사라진다', async () => {
+      const { me, post } = await writeSetup();
+      const mine = await commentFor(me, post, '내 댓글', at(5));
+      expect(await repo.deleteComment(me.githubId, mine.commentId)).toEqual({
+        status: 'DELETED',
+        postId: Number(post.postId),
+      });
+      expect(await rowsOf(post)).toEqual([]);
+    });
+
+    it('다른 댓글은 남기고 그 댓글만 지운다', async () => {
+      const { me, other, post } = await writeSetup();
+      const mine = await commentFor(me, post, '내 댓글', at(5));
+      await commentFor(other, post, '남의 댓글', at(6));
+      await commentFor(me, post, '내 다른 댓글', at(7));
+      await repo.deleteComment(me.githubId, mine.commentId);
+      expect((await rowsOf(post)).map((row) => row.content)).toEqual([
+        '남의 댓글',
+        '내 다른 댓글',
+      ]);
+    });
+
+    // 옛 JPA의 cascade = ALL: 댓글을 지우면 답글(과 답글의 답글)도 함께 지워진다. 외래키가 막기 때문에 가장 깊은 층부터 지운다.
+    it('답글과 답글의 답글까지 모두 함께 지운다(다른 사람이 쓴 답글도)', async () => {
+      const { me, other, post } = await writeSetup();
+      const top = await commentFor(me, post, '최상위', at(5));
+      const reply1 = await commentFor(other, post, '답글1', at(6), {
+        parentCommentId: top.commentId,
+      });
+      const reply2 = await commentFor(me, post, '답답글', at(7), {
+        parentCommentId: reply1.commentId,
+      });
+      await commentFor(other, post, '답답답글', at(8), {
+        parentCommentId: reply2.commentId,
+      });
+      await commentFor(other, post, '다른 답글', at(9), {
+        parentCommentId: top.commentId,
+      });
+      const survivor = await commentFor(other, post, '무관한 최상위', at(10));
+
+      expect(await repo.deleteComment(me.githubId, top.commentId)).toEqual({
+        status: 'DELETED',
+        postId: Number(post.postId),
+      });
+      expect((await rowsOf(post)).map((row) => row.commentId)).toEqual([
+        survivor.commentId,
+      ]);
+    });
+
+    it('답글을 지우면 부모와 형제는 남고 그 답글의 아래만 지워진다', async () => {
+      const { me, other, post } = await writeSetup();
+      const top = await commentFor(other, post, '최상위', at(5));
+      const mine = await commentFor(me, post, '내 답글', at(6), {
+        parentCommentId: top.commentId,
+      });
+      await commentFor(other, post, '내 답글의 답글', at(7), {
+        parentCommentId: mine.commentId,
+      });
+      await commentFor(other, post, '형제 답글', at(8), {
+        parentCommentId: top.commentId,
+      });
+
+      await repo.deleteComment(me.githubId, mine.commentId);
+
+      expect((await rowsOf(post)).map((row) => row.content)).toEqual([
+        '최상위',
+        '형제 답글',
+      ]);
+    });
+
+    it('다른 글의 댓글은 건드리지 않는다', async () => {
+      const { me, other, post } = await writeSetup();
+      const elsewhere = await createPost(other);
+      const mine = await commentFor(me, post, '내 댓글', at(5));
+      await commentFor(me, elsewhere, '다른 글의 내 댓글', at(6));
+      await repo.deleteComment(me.githubId, mine.commentId);
+      expect(await rowsOf(elsewhere)).toHaveLength(1);
+    });
+
+    // 남의 댓글에 대한 거부는 답글이 있어도 아무것도 지우지 않는다.
+    it('남의 댓글을 지우려 하면 답글도 그대로다', async () => {
+      const { me, other, post } = await writeSetup();
+      const theirs = await commentFor(other, post, '남의 댓글', at(5));
+      await commentFor(me, post, '내 답글', at(6), {
+        parentCommentId: theirs.commentId,
+      });
+      await repo.deleteComment(me.githubId, theirs.commentId);
+      expect(await rowsOf(post)).toHaveLength(2);
     });
   });
 });

@@ -1,9 +1,8 @@
 import { Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiParam } from '@nestjs/swagger';
 import { ResponseDto } from '../../common/dto/response.dto.js';
-import { ArgumentTypeMismatchException } from '../../common/error/input.exception.js';
 import { parsePageable } from '../../common/pageable.js';
-import { parseSpringLong } from '../../common/spring-compat.js';
+import { parsePathLong } from '../../common/spring-compat.js';
 import {
   ApiPageable,
   OkBoolean,
@@ -17,14 +16,6 @@ import { LikeService } from './like.service.js';
 
 // 옛 @PageableDefault(sort = "createdAt", direction = DESC)의 기본 크기다.
 const DEFAULT_PAGE_SIZE = 10;
-
-// 경로의 글 번호를 Spring의 Long 변환 규칙으로 읽는다. 읽지 못하면 400 C005다(옛 MethodArgumentTypeMismatchException).
-// 세 작업(좋아요 여부, 추가, 취소)이 같은 규칙을 쓴다.
-function parsePostId(raw: string): bigint {
-  const id = parseSpringLong(raw);
-  if (id === undefined) throw new ArgumentTypeMismatchException('postId', raw);
-  return id;
-}
 
 // @Controller: 이 클래스의 메서드들이 /api/v1/likes 아래 라우트가 된다. 모든 작업이 기본 규칙(로그인 필요)이라 데코레이터가 없다.
 // 가드가 request.user를 붙여 두고, @CurrentUser()가 꺼낸다.
@@ -55,7 +46,7 @@ export class LikeController {
   @ApiParam({ name: 'postId', type: 'integer', format: 'int64' })
   @OkString()
   async likePost(@CurrentUser() user: User, @Param('postId') postId: string) {
-    await this.likes.likePost(user.githubId, parsePostId(postId));
+    await this.likes.likePost(user.githubId, parsePathLong('postId', postId));
     return ResponseDto.of('좋아요 추가 성공', undefined, 201);
   }
 
@@ -65,7 +56,7 @@ export class LikeController {
   @ApiParam({ name: 'postId', type: 'integer', format: 'int64' })
   @OkString()
   async unlikePost(@CurrentUser() user: User, @Param('postId') postId: string) {
-    await this.likes.unlikePost(user.githubId, parsePostId(postId));
+    await this.likes.unlikePost(user.githubId, parsePathLong('postId', postId));
     return ResponseDto.of('좋아요 취소 성공');
   }
 
@@ -80,7 +71,10 @@ export class LikeController {
   ) {
     return ResponseDto.of(
       '좋아요 여부 조회 성공',
-      await this.likes.isPostLiked(user.githubId, parsePostId(postId)),
+      await this.likes.isPostLiked(
+        user.githubId,
+        parsePathLong('postId', postId),
+      ),
     );
   }
 }

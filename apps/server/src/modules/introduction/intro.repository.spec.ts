@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import { ErrorCode } from '../../common/error/error-code.js';
+import { kstWallClockNow } from '../../common/local-date-time.js';
 import type { SortOrder } from '../../common/pageable.js';
 import type { EnvironmentVariables } from '../../config/env.validation.js';
 import { PrismaService } from '../../infra/prisma/prisma.service.js';
@@ -274,6 +275,141 @@ describe.skipIf(!reachable)('IntroRepository (진짜 MySQL)', () => {
       await createIntro('감자 🥔 반가워요', at(9));
       const page = await repo.findIntroPage(first(0, 1), DEFAULT);
       expect(page.intros[0].content).toBe('감자 🥔 반가워요');
+    });
+  });
+
+  const introOf = (user: { userId: bigint }) =>
+    prisma.introduction.findUnique({ where: { userId: user.userId } });
+
+  describe('createIntro', () => {
+    it('처음 쓰면 CREATED와 만든 소개(작성자 번호·닉네임, 이미지 없음은 null)를 주고 행이 생긴다', async () => {
+      const me = await createUser();
+      const result = await repo.createIntro(me.githubId, '안녕하세요');
+      expect(result.status).toBe('CREATED');
+      if (result.status !== 'CREATED') return;
+      expect(result.intro).toMatchObject({
+        userId: Number(me.userId),
+        nickname: me.nickname,
+        profileImageUrl: null,
+        content: '안녕하세요',
+      });
+      expect(await introOf(me)).toMatchObject({
+        introId: BigInt(result.intro.introId),
+        content: '안녕하세요',
+      });
+    });
+
+    it('작성자의 프로필 이미지 주소를 준다', async () => {
+      const me = await createUser('https://img.test/me.png');
+      const result = await repo.createIntro(me.githubId, '안녕하세요');
+      expect(result).toMatchObject({
+        status: 'CREATED',
+        intro: { profileImageUrl: 'https://img.test/me.png' },
+      });
+    });
+
+    // DB에 DATETIME 기본값이 없어서 코드가 채운다. 서울 벽시계 값(UTC 필드)의 지금이고 두 값이 같다.
+    it('만든 시각과 고친 시각이 같고 서울 벽시계 값의 지금이다', async () => {
+      const me = await createUser();
+      await repo.createIntro(me.githubId, '시각');
+      const row = await introOf(me);
+      expect(row?.updatedAt).toEqual(row?.createdAt);
+      expect(
+        Math.abs((row?.createdAt.getTime() ?? 0) - kstWallClockNow().getTime()),
+      ).toBeLessThan(10_000);
+    });
+
+    it('이미 썼으면 ALREADY_EXISTS이고 기존 내용을 바꾸지 않는다', async () => {
+      const me = await createUser();
+      await introFor(me, '처음 쓴 소개', at(5));
+      expect(await repo.createIntro(me.githubId, '새 소개')).toEqual({
+        status: 'ALREADY_EXISTS',
+      });
+      expect((await introOf(me))?.content).toBe('처음 쓴 소개');
+    });
+
+    it('연달아 두 번 쓰면 두 번째가 ALREADY_EXISTS다', async () => {
+      const me = await createUser();
+      expect((await repo.createIntro(me.githubId, '하나')).status).toBe(
+        'CREATED',
+      );
+      expect((await repo.createIntro(me.githubId, '둘')).status).toBe(
+        'ALREADY_EXISTS',
+      );
+    });
+
+    it('다른 사용자가 이미 썼어도 나는 쓸 수 있다', async () => {
+      const me = await createUser();
+      const other = await createUser();
+      await introFor(other, '남의 소개', at(5));
+      expect((await repo.createIntro(me.githubId, '내 소개')).status).toBe(
+        'CREATED',
+      );
+      expect((await introOf(other))?.content).toBe('남의 소개');
+    });
+
+    // 읽고 나서 쓰는 사이에 같은 사용자의 요청이 또 오면 둘 다 통과한다. 그때는 DB의 유일 제약(uk_introductions_user)이 막아 오류(500)가 된다.
+    it('같은 사용자의 소개를 직접 둘 넣으면 DB가 막는다', async () => {
+      const me = await createUser();
+      await introFor(me, '하나', at(5));
+      await expect(introFor(me, '둘', at(6))).rejects.toThrow();
+    });
+
+    it('내용은 그대로 저장한다(앞뒤 공백도)', async () => {
+      const me = await createUser();
+      await repo.createIntro(me.githubId, '  안녕  ');
+      expect((await introOf(me))?.content).toBe('  안녕  ');
+    });
+
+    // 쓰기와 읽기가 같은 행을 본다는 증거다.
+    it('쓴 소개가 목록 읽기에 나타난다', async () => {
+      const me = await createUser();
+      await repo.createIntro(me.githubId, '목록에 보일 소개');
+      expect(mine(await everything(DEFAULT))).toContain('목록에 보일 소개');
+    });
+  });
+
+  describe('deleteIntro', () => {
+    it('소개가 없으면 NOT_FOUND다', async () => {
+      const me = await createUser();
+      expect(await repo.deleteIntro(me.githubId, 987654321012n)).toEqual({
+        status: 'NOT_FOUND',
+      });
+    });
+
+    it('남의 소개이면 FORBIDDEN이고 지우지 않는다', async () => {
+      const me = await createUser();
+      const { user: other, intro } = await createIntro('남의 소개', at(5));
+      expect(await repo.deleteIntro(me.githubId, intro.introId)).toEqual({
+        status: 'FORBIDDEN',
+      });
+      expect(await introOf(other)).not.toBeNull();
+    });
+
+    it('내 소개이면 DELETED이고 행이 사라진다', async () => {
+      const { user: me, intro } = await createIntro('내 소개', at(5));
+      expect(await repo.deleteIntro(me.githubId, intro.introId)).toEqual({
+        status: 'DELETED',
+      });
+      expect(await introOf(me)).toBeNull();
+    });
+
+    it('다른 사람의 소개는 남긴다', async () => {
+      const { user: me, intro } = await createIntro('내 소개', at(5));
+      const { user: other } = await createIntro('남의 소개', at(6));
+      await repo.deleteIntro(me.githubId, intro.introId);
+      expect(await introOf(other)).not.toBeNull();
+    });
+
+    // 지운 뒤에는 다시 쓸 수 있다(사용자마다 하나라는 제한이 풀린다).
+    it('지운 뒤에 다시 쓸 수 있다', async () => {
+      const me = await createUser();
+      const created = await repo.createIntro(me.githubId, '처음');
+      if (created.status !== 'CREATED') throw new Error('만들어지지 않았다');
+      await repo.deleteIntro(me.githubId, BigInt(created.intro.introId));
+      expect((await repo.createIntro(me.githubId, '다시')).status).toBe(
+        'CREATED',
+      );
     });
   });
 });

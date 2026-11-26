@@ -1,7 +1,9 @@
+import { ArgumentTypeMismatchException } from './error/input.exception.js';
 import {
   firstQueryValue,
   javaTrim,
   parseJavaInt,
+  parsePathLong,
   parseSpringLong,
 } from './spring-compat.js';
 
@@ -158,4 +160,27 @@ describe('parseSpringLong', () => {
   ])('%j는 숫자가 아니거나 int64 범위 밖이다', (text) => {
     expect(parseSpringLong(text)).toBeUndefined();
   });
+});
+
+describe('parsePathLong', () => {
+  it('읽을 수 있으면 bigint를 준다(공백과 16진수도 parseSpringLong과 같다)', () => {
+    expect(parsePathLong('postId', '7')).toBe(7n);
+    expect(parsePathLong('postId', '0x10')).toBe(16n);
+    expect(parsePathLong('postId', ' 23 ')).toBe(23n);
+  });
+
+  // 오류는 400 C005가 되고, 오류 본문의 field에는 경로 이름이 실린다.
+  it.each(['abc', '1.5', '', '9223372036854775808'])(
+    '읽을 수 없으면(%j) 경로 이름과 원래 값을 담아 던진다',
+    (raw) => {
+      expect(() => parsePathLong('commentId', raw)).toThrow(
+        new ArgumentTypeMismatchException('commentId', raw),
+      );
+      try {
+        parsePathLong('commentId', raw);
+      } catch (error) {
+        expect(error).toMatchObject({ field: 'commentId', value: raw });
+      }
+    },
+  );
 });
