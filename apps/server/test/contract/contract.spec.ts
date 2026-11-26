@@ -15,7 +15,7 @@ const contract = JSON.parse(
   ),
 ) as Contract;
 
-// 시험 단계에서는 가짜 컨트롤러가 흉내 내는 작업과 실제로 옮긴 작업(reissue, logout, 글 목록 4개, 글 상세·인기·홈 피드·태그, 사용자·소개 6개, 내 댓글·좋아요 3개)만 비교한다.
+// 시험 단계에서는 가짜 컨트롤러가 흉내 내는 작업과 실제로 옮긴 작업(reissue, logout, 글 목록 4개, 글 상세·인기·홈 피드·태그, 사용자·소개 11개, 내 댓글·좋아요 3개)만 비교한다.
 // 실제 컨트롤러가 늘면 이 목록을 없애고 계약 전체와 비교한다.
 // 합격 기준: 비교 결과가 빈 목록이어야 한다. 데코레이터로 표현이 안 되면 생성된 문서를 후처리해도 되지만
 // 판정은 이 비교가 한다.
@@ -25,6 +25,9 @@ const TRIAL = {
     'deleteComment',
     'createIntro',
     'deleteIntro',
+    'completeProfile',
+    'updateProfile',
+    'approveUserProfile',
     'getMyComments',
     'getMyLikes',
     'isPostLiked',
@@ -121,6 +124,19 @@ describe('OpenAPI 계약', () => {
       const problems = diffContract(contract, bad, TRIAL);
       expect(problems.join('\n')).toContain(
         'ResponseDtoCommentResponse: 필드가 다르다',
+      );
+    });
+
+    // 필드에 직접 적힌 enum은 프론트 생성기가 <모델><필드>Enum 타입을 만든다. enum이 빠지면(그냥 문자열) 그 타입이 아니다.
+    it('enum이 빠진 필드', () => {
+      const bad = structuredClone(doc);
+      const schema = bad.components?.schemas
+        ?.UserProfileRequest as SchemaObject;
+      const properties = schema.properties ?? {};
+      delete (properties.position as SchemaObject).enum;
+      const problems = diffContract(contract, bad, TRIAL);
+      expect(problems.join('\n')).toContain(
+        'UserProfileRequest.position: 타입이 다르다',
       );
     });
 

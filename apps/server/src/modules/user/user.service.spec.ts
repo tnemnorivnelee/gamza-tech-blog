@@ -6,6 +6,8 @@ import type {
   UserProfile,
   UserQueryRepository,
 } from './user-query.repository.js';
+import type { ProfileFields } from './dto/profile-request.js';
+import type { UserWriteRepository } from './user-write.repository.js';
 import { UserService } from './user.service.js';
 
 const profile = (overrides: Partial<UserProfile> = {}): UserProfile => ({
@@ -49,6 +51,16 @@ function setup() {
     countActivity: vi.fn().mockResolvedValue(ACTIVITY),
     findPendingUsers: vi.fn().mockResolvedValue([]),
   };
+  const writes = {
+    existsByStudentNumber: vi.fn().mockResolvedValue(false),
+    completeProfile: vi
+      .fn()
+      .mockResolvedValue({ status: 'UPDATED', profile: profile() }),
+    updateProfile: vi
+      .fn()
+      .mockResolvedValue({ status: 'UPDATED', profile: profile() }),
+    approve: vi.fn().mockResolvedValue({ status: 'APPROVED' }),
+  };
   // 공개 프로필은 캐시가 붙은 getMyPosts가 아니라 캐시 없는 findPostsByWriter로 글 목록을 읽는다(옛 postQueryPort 직접 호출).
   const posts = {
     findPostsByWriter: vi.fn().mockResolvedValue(POSTS),
@@ -58,10 +70,12 @@ function setup() {
   const { redis, cache } = createReadCache();
   return {
     repo,
+    writes,
     posts,
     redis,
     service: new UserService(
       repo as unknown as UserQueryRepository,
+      writes as unknown as UserWriteRepository,
       posts as unknown as PostService,
       cache,
     ),
@@ -266,6 +280,155 @@ describe('UserService', () => {
       expect(redis.values.size).toBe(0);
       expect(repo.countActivity).toHaveBeenCalledTimes(2);
       expect(repo.findPendingUsers).toHaveBeenCalledTimes(2);
+    });
+  });
+  // 옛 UserServiceImpl.setupUserProfile·updateProfile과 AdminUserServiceImpl.approveUserProfile.
+  // 캐시는 updateProfile만 그 사용자의 userProfile 키 하나를 지운다. 나머지는 지우지 않는다(옛 코드도 지우지 않았다).
+  describe('프로필 쓰기', () => {
+    const FIELDS: ProfileFields = {
+      email: 'new@example.com',
+      studentNumber: '20231234',
+      gamjaBatch: 9,
+      position: 'BACKEND',
+    };
+    const CACHED = [
+      'cache:userProfile:octo',
+      'cache:userProfile:boss',
+      'cache:publicProfileAggregate:감자-0-20',
+    ];
+    const withCache = (redis: { values: Map<string, string> }) =>
+      CACHED.forEach((key) => redis.values.set(key, '1'));
+
+    describe('completeProfile', () => {
+      it('저장소가 준 프로필을 응답으로 바꾼다(날짜는 초까지 쓴 문자열)', async () => {
+        const { service, writes } = setup();
+        writes.completeProfile.mockResolvedValue({
+          status: 'UPDATED',
+          profile: profile({ role: 'PENDING' }),
+        });
+
+        const response = await service.completeProfile('octo', FIELDS);
+
+        expect(response).toMatchObject({
+          githubId: 'octo',
+          role: 'PENDING',
+          createdAt: '2025-07-27T21:08:37',
+          updatedAt: '2025-08-05T10:20:30',
+        });
+        expect(writes.completeProfile).toHaveBeenCalledWith('octo', FIELDS);
+      });
+
+      it('학번이 이미 있으면 409 U004(이메일 중복 코드)이고 저장하지 않는다', async () => {
+        const { service, writes } = setup();
+        writes.existsByStudentNumber.mockResolvedValue(true);
+
+        await expect(
+          service.completeProfile('octo', FIELDS),
+        ).rejects.toMatchObject({ errorCode: ErrorCode.EMAIL_ALREADY_EXISTS });
+        expect(writes.existsByStudentNumber).toHaveBeenCalledWith('20231234');
+        expect(writes.completeProfile).not.toHaveBeenCalled();
+      });
+
+      it('사용자가 없으면 404 U001이다', async () => {
+        const { service, writes } = setup();
+        writes.completeProfile.mockResolvedValue({ status: 'USER_NOT_FOUND' });
+
+        await expect(
+          service.completeProfile('ghost', FIELDS),
+        ).rejects.toMatchObject({ errorCode: ErrorCode.USER_NOT_FOUND });
+      });
+
+      it('캐시를 지우지 않는다', async () => {
+        const { service, redis } = setup();
+        withCache(redis);
+
+        await service.completeProfile('octo', FIELDS);
+
+        expect([...redis.values.keys()].sort()).toEqual([...CACHED].sort());
+      });
+    });
+
+    describe('updateProfile', () => {
+      it('저장소가 준 프로필을 응답으로 바꾸고, 학번 중복은 검사하지 않는다', async () => {
+        const { service, writes } = setup();
+
+        const response = await service.updateProfile('octo', FIELDS);
+
+        expect(response).toMatchObject({
+          githubId: 'octo',
+          createdAt: '2025-07-27T21:08:37',
+          updatedAt: '2025-08-05T10:20:30',
+        });
+        expect(writes.updateProfile).toHaveBeenCalledWith('octo', FIELDS);
+        expect(writes.existsByStudentNumber).not.toHaveBeenCalled();
+      });
+
+      it('성공하면 그 사용자의 userProfile 키만 지운다', async () => {
+        const { service, redis } = setup();
+        withCache(redis);
+
+        await service.updateProfile('octo', FIELDS);
+
+        expect([...redis.values.keys()].sort()).toEqual([
+          'cache:publicProfileAggregate:감자-0-20',
+          'cache:userProfile:boss',
+        ]);
+      });
+
+      it('사용자가 없으면 404 U001이고 캐시를 지우지 않는다', async () => {
+        const { service, writes, redis } = setup();
+        writes.updateProfile.mockResolvedValue({ status: 'USER_NOT_FOUND' });
+        withCache(redis);
+
+        await expect(
+          service.updateProfile('octo', FIELDS),
+        ).rejects.toMatchObject({
+          errorCode: ErrorCode.USER_NOT_FOUND,
+        });
+        expect(redis.values.size).toBe(3);
+      });
+
+      it('저장이 실패하면 캐시를 지우지 않는다', async () => {
+        const { service, writes, redis } = setup();
+        writes.updateProfile.mockRejectedValue(new Error('유일 제약'));
+        withCache(redis);
+
+        await expect(service.updateProfile('octo', FIELDS)).rejects.toThrow(
+          '유일 제약',
+        );
+        expect(redis.values.size).toBe(3);
+      });
+    });
+
+    describe('approveUserProfile', () => {
+      it('승인하면 아무것도 돌려주지 않고 캐시도 지우지 않는다', async () => {
+        const { service, writes, redis } = setup();
+        withCache(redis);
+
+        expect(await service.approveUserProfile(7n)).toBeUndefined();
+
+        expect(writes.approve).toHaveBeenCalledWith(7n);
+        expect(redis.values.size).toBe(3);
+      });
+
+      it('사용자가 없으면 404 U001이다', async () => {
+        const { service, writes } = setup();
+        writes.approve.mockResolvedValue({ status: 'USER_NOT_FOUND' });
+
+        await expect(service.approveUserProfile(7n)).rejects.toMatchObject({
+          errorCode: ErrorCode.USER_NOT_FOUND,
+        });
+      });
+
+      // 옛 UserNotPendingException은 INVALID_INPUT_VALUE(400 C001)였고, 사용자 지정 메시지는 응답에 나가지 않았다.
+      it('PENDING이 아니면 400 C001이다', async () => {
+        const { service, writes } = setup();
+        writes.approve.mockResolvedValue({ status: 'NOT_PENDING' });
+
+        await expect(service.approveUserProfile(7n)).rejects.toMatchObject({
+          errorCode: ErrorCode.INVALID_INPUT_VALUE,
+        });
+      });
     });
   });
 });

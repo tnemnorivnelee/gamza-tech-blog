@@ -6,6 +6,7 @@ import { AdminUserController } from './admin-user.controller.js';
 import { PrismaUserRepository } from './prisma-user.repository.js';
 import { UserController } from './user.controller.js';
 import { UserQueryRepository } from './user-query.repository.js';
+import { UserWriteRepository } from './user-write.repository.js';
 import { UserRepository } from './user.repository.js';
 import { UserService } from './user.service.js';
 
@@ -20,6 +21,7 @@ import { UserService } from './user.service.js';
     { provide: UserRepository, useClass: PrismaUserRepository },
     UserService,
     UserQueryRepository,
+    UserWriteRepository,
   ],
   exports: [UserRepository],
 })

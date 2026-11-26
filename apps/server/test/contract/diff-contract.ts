@@ -41,10 +41,12 @@ const refName = (schema?: Schema) =>
 
 // 생성기가 만들 TypeScript 타입 이름으로 바꿔 계약과 문자열로 비교한다.
 // 이름 없는 합성(allOf) 스키마는 title이 생성기에게 주는 모델 이름이다.
-function tsType(schema: Schema): string {
+// 필드에 직접 적힌 enum은 생성기가 "<모델><필드>Enum"이라는 타입을 만든다(예: UserProfileRequestPositionEnum).
+// 그 이름은 호출하는 쪽이 enumName으로 넘기고, 값 목록은 계약에 없어서 이 비교로는 보지 못한다(DTO 시험이 값을 고정한다).
+function tsType(schema: Schema, enumName?: string): string {
   if ('$ref' in schema) return refName(schema) ?? '?';
   if (schema.allOf) return schema.title ?? '?';
-  if (schema.enum) return `enum(${schema.enum.join('|')})`;
+  if (schema.enum) return enumName ?? `enum(${schema.enum.join('|')})`;
   switch (schema.type) {
     case 'array':
       return `Array<${schema.items ? tsType(schema.items) : '?'}>`;
@@ -217,9 +219,10 @@ function diffModel(
         `${name}.${field}: ${spec.optional ? '선택' : '필수'}여야 한다`,
       );
     }
-    if (tsType(prop) !== spec.type) {
+    const enumName = `${name}${field.charAt(0).toUpperCase()}${field.slice(1)}Enum`;
+    if (tsType(prop, enumName) !== spec.type) {
       problems.push(
-        `${name}.${field}: 타입이 다르다 (계약 ${spec.type}, 서버 ${tsType(prop)})`,
+        `${name}.${field}: 타입이 다르다 (계약 ${spec.type}, 서버 ${tsType(prop, enumName)})`,
       );
     }
     for (const token of spec.type.match(/\w+/g) ?? []) {
