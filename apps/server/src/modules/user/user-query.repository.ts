@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '../../infra/prisma/generated/client.js';
 import { PrismaService } from '../../infra/prisma/prisma.service.js';
 
 // 내 프로필 한 건에 필요한 값이다. Prisma의 타입(BigInt, enum 등)은 이 파일 안에서 끝내고 밖으로는 일반 값만 내보낸다.
@@ -39,6 +40,32 @@ export interface PendingUser {
   readonly position: string | null;
 }
 
+// 내 프로필을 읽는 칸이다. 읽기(findProfileByGithubId)와 프로필 쓰기(UserWriteRepository)가 같은 응답을 만들어서 함께 쓴다.
+export const PROFILE_SELECT = {
+  githubId: true,
+  nickname: true,
+  name: true,
+  email: true,
+  position: true,
+  role: true,
+  studentNumber: true,
+  gamjaBatch: true,
+  createdAt: true,
+  updatedAt: true,
+  // 옛 User는 프로필 이미지를 하나만 가진다(@OneToOne). DB에도 둘 이상 가진 사용자가 없다.
+  profileImages: { select: { profileImageUrl: true }, take: 1 },
+} satisfies Prisma.UserSelect;
+
+export function toUserProfile(
+  row: Prisma.UserGetPayload<{ select: typeof PROFILE_SELECT }>,
+): UserProfile {
+  const { profileImages, ...profile } = row;
+  return {
+    ...profile,
+    profileImageUrl: profileImages[0]?.profileImageUrl ?? null,
+  };
+}
+
 // 사용자 읽기 조회의 MySQL 구현이다(옛 UserRepository의 읽기 부분과 Like/Post/CommentRepository의 countByUser).
 // 로그인과 가드가 쓰는 UserRepository(바꿔 끼우는 인터페이스)와 따로 둔다. 활동 개수는 글·좋아요·댓글 테이블에 걸쳐 있어서
 // 인메모리 가짜로 흉내 내기보다 이 클래스를 진짜 MySQL로 확인하는 편이 낫다. Prisma는 이런 *.repository.ts에서만 import한다.
@@ -49,27 +76,9 @@ export class UserQueryRepository {
   async findProfileByGithubId(githubId: string): Promise<UserProfile | null> {
     const row = await this.prisma.user.findUnique({
       where: { githubId },
-      select: {
-        githubId: true,
-        nickname: true,
-        name: true,
-        email: true,
-        position: true,
-        role: true,
-        studentNumber: true,
-        gamjaBatch: true,
-        createdAt: true,
-        updatedAt: true,
-        // 옛 User는 프로필 이미지를 하나만 가진다(@OneToOne). DB에도 둘 이상 가진 사용자가 없다.
-        profileImages: { select: { profileImageUrl: true }, take: 1 },
-      },
+      select: PROFILE_SELECT,
     });
-    if (!row) return null;
-    const { profileImages, ...profile } = row;
-    return {
-      ...profile,
-      profileImageUrl: profileImages[0]?.profileImageUrl ?? null,
-    };
+    return row ? toUserProfile(row) : null;
   }
 
   // 닉네임 비교는 컬럼의 정렬 규칙(utf8mb4_0900_ai_ci)을 따라서 대소문자와 악센트를 구분하지 않는다. 옛 findByNickname과 같다.

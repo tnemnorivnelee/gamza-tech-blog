@@ -1,5 +1,5 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
-import { ApiOperation } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { ApiBody, ApiOperation } from '@nestjs/swagger';
 import { ResponseDto } from '../../common/dto/response.dto.js';
 import { parsePageable } from '../../common/pageable.js';
 import {
@@ -9,7 +9,10 @@ import {
 } from '../../common/swagger/api-decorators.js';
 import { Public, Roles } from '../auth/access.decorator.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
+import { readProfileRequest } from './dto/profile-request.js';
+import { UpdateProfileRequest } from './dto/update-profile-request.dto.js';
 import { UserActivityResponse } from './dto/user-activity-response.dto.js';
+import { UserProfileRequest } from './dto/user-profile-request.dto.js';
 import { UserProfileResponse } from './dto/user-profile-response.dto.js';
 import { UserPublicProfileResponse } from './dto/user-public-profile-response.dto.js';
 import type { User } from './user.repository.js';
@@ -31,6 +34,40 @@ export class UserController {
     return ResponseDto.of(
       '프로필 조회 성공',
       await this.users.getCurrentUserProfile(user.githubId),
+    );
+  }
+
+  // 기본 규칙(USER, ADMIN)이다. 요청 내용은 서비스에 가기 전에 검사한다(옛 @Valid): 위반하면 400 C001이다.
+  // 성공하면 그 사용자의 userProfile 캐시를 지운다.
+  @ApiOperation({ summary: '정보 업데이트(마이페이지용)' })
+  @Put('me/update/profile')
+  @ApiBody({ type: UpdateProfileRequest })
+  @OkOf(UserProfileResponse)
+  async updateProfile(
+    @CurrentUser() user: User,
+    @Body() body: UpdateProfileRequest,
+  ) {
+    const fields = readProfileRequest(body, { emailRequired: true });
+    return ResponseDto.of(
+      '프로필이 수정되었습니다',
+      await this.users.updateProfile(user.githubId, fields),
+    );
+  }
+
+  // @Roles('PRE_REGISTER'): 가입 화면에서 막 로그인한 사용자만 부른다(옛 hasRole('PRE_REGISTER')). 저장하면 role이 PENDING이 되어 관리자의 승인을 기다린다.
+  @ApiOperation({ summary: '추가 정보 입력(회원가입용)' })
+  @Roles('PRE_REGISTER')
+  @Post('me/complete')
+  @ApiBody({ type: UserProfileRequest })
+  @OkOf(UserProfileResponse)
+  async completeProfile(
+    @CurrentUser() user: User,
+    @Body() body: UserProfileRequest,
+  ) {
+    const fields = readProfileRequest(body, { emailRequired: false });
+    return ResponseDto.of(
+      '프로필이 성공적으로 완성되었습니다.',
+      await this.users.completeProfile(user.githubId, fields),
     );
   }
 
