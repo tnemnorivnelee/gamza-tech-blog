@@ -14,8 +14,12 @@ import { IntroController } from '../../src/modules/introduction/intro.controller
 import { IntroService } from '../../src/modules/introduction/intro.service.js';
 import { LikeController } from '../../src/modules/like/like.controller.js';
 import { LikeService } from '../../src/modules/like/like.service.js';
+import { PostImageController } from '../../src/modules/post-image/post-image.controller.js';
+import { PostImageService } from '../../src/modules/post-image/post-image.service.js';
 import { PostController } from '../../src/modules/post/post.controller.js';
 import { PostService } from '../../src/modules/post/post.service.js';
+import { ProfileImageController } from '../../src/modules/profile-image/profile-image.controller.js';
+import { ProfileImageService } from '../../src/modules/profile-image/profile-image.service.js';
 import { TagController } from '../../src/modules/tag/tag.controller.js';
 import { TagService } from '../../src/modules/tag/tag.service.js';
 import { AdminUserController } from '../../src/modules/user/admin-user.controller.js';
@@ -38,7 +42,7 @@ class FakeAdmissionController {
   }
 }
 
-// 인증·글·태그·소개·사용자·댓글·좋아요 컨트롤러는 실제 클래스를 쓴다. 명세는 데코레이터만으로 만들어지므로 의존하는 부품은 빈 가짜로 채운다.
+// 인증·글·태그·소개·사용자·댓글·좋아요·이미지 컨트롤러는 실제 클래스를 쓴다. 명세는 데코레이터만으로 만들어지므로 의존하는 부품은 빈 가짜로 채운다.
 // AuthModule을 통째로 넣으면 전역 가드가 따라와서 위 가짜 컨트롤러의 응답 시험이 로그인을 요구하게 된다.
 export async function createFakeApp() {
   const moduleRef = await Test.createTestingModule({
@@ -52,6 +56,8 @@ export async function createFakeApp() {
       AdminUserController,
       CommentController,
       LikeController,
+      PostImageController,
+      ProfileImageController,
     ],
     providers: [
       { provide: AuthService, useValue: {} },
@@ -59,6 +65,8 @@ export async function createFakeApp() {
       { provide: TagService, useValue: {} },
       { provide: IntroService, useValue: {} },
       { provide: UserService, useValue: {} },
+      { provide: PostImageService, useValue: {} },
+      { provide: ProfileImageService, useValue: {} },
       // 댓글은 진짜 컨트롤러가 응답한다. 서비스만 값을 돌려주는 가짜다(요청의 글 번호를 댓글 번호로 돌려준다).
       {
         provide: CommentService,

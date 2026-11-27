@@ -6,7 +6,9 @@ import { AuthModule } from './modules/auth/auth.module.js';
 import { CommentModule } from './modules/comment/comment.module.js';
 import { IntroModule } from './modules/introduction/intro.module.js';
 import { LikeModule } from './modules/like/like.module.js';
+import { PostImageModule } from './modules/post-image/post-image.module.js';
 import { PostModule } from './modules/post/post.module.js';
+import { ProfileImageModule } from './modules/profile-image/profile-image.module.js';
 import { TagModule } from './modules/tag/tag.module.js';
 import { UserModule } from './modules/user/user.module.js';
 
@@ -23,6 +25,8 @@ import { UserModule } from './modules/user/user.module.js';
     IntroModule, // 소개 목록 조회
     CommentModule, // 내 댓글 목록 조회
     LikeModule, // 내 좋아요 목록·좋아요 여부 조회
+    PostImageModule, // 글 이미지 업로드(임시 폴더)
+    ProfileImageModule, // 프로필 이미지 바꾸기·지우기
   ],
 })
 export class AppModule {}

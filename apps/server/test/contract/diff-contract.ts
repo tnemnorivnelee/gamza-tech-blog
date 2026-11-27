@@ -18,6 +18,7 @@ interface ContractOperation {
   path: string;
   query: string[];
   bodyModel: string;
+  multipart?: boolean;
   response: string;
   bearerAuth: boolean;
 }
@@ -109,6 +110,13 @@ const bodySchema = (operation: OperationObject) =>
       : undefined,
   );
 
+const bodyContentTypes = (operation: OperationObject) =>
+  Object.keys(
+    operation.requestBody && 'content' in operation.requestBody
+      ? operation.requestBody.content
+      : {},
+  ).sort();
+
 const responseSchema = (operation: OperationObject) => {
   const response = operation.responses['200'];
   return firstSchema(
@@ -168,11 +176,25 @@ function diffOperation(want: ContractOperation, got: Found): string[] {
   );
   // 태그가 있으면 생성기가 DefaultApi 하나가 아니라 태그별 API 클래스로 나눌 수 있다.
   same('태그', [], got.operation.tags ?? []);
-  same(
-    '요청 본문 모델',
-    want.bodyModel,
-    refName(bodySchema(got.operation)) ?? '',
-  );
+  if (want.multipart) {
+    // 파일 업로드는 프론트 생성기가 본문 모델 없이 폼 칸(formParams)으로 만든다. 서버 명세도 이름 없는 인라인 객체여야 하고,
+    // 본문 형식이 multipart/form-data 하나뿐이어야 한다(JSON 형식이 같이 있으면 생성기가 다른 코드를 만든다).
+    // 계약에 폼 칸의 이름은 없어서 이름(file, imageFile)은 컨트롤러 시험이 고정한다.
+    same('본문 형식', ['multipart/form-data'], bodyContentTypes(got.operation));
+    same(
+      '요청 본문 모델',
+      want.bodyModel,
+      bodySchema(got.operation) && !('$ref' in bodySchema(got.operation)!)
+        ? 'formParams'
+        : '',
+    );
+  } else {
+    same(
+      '요청 본문 모델',
+      want.bodyModel,
+      refName(bodySchema(got.operation)) ?? '',
+    );
+  }
   const response = responseSchema(got.operation);
   same('200 응답 모델 이름', want.response, response && tsType(response));
   return problems;
@@ -262,7 +284,8 @@ export function diffContract(
     }
     problems.push(...diffOperation(want, got));
     queue.push({ name: want.response, schema: responseSchema(got.operation) });
-    if (want.bodyModel)
+    // 폼(formParams)은 모델 이름이 아니라서 모델 비교 대상이 아니다(위 diffOperation이 본문 형식을 본다).
+    if (want.bodyModel && !want.multipart)
       queue.push({ name: want.bodyModel, schema: bodySchema(got.operation) });
   }
 

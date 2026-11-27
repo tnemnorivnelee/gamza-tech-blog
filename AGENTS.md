@@ -55,7 +55,8 @@ apps/server/src/
                      read-cache.ts, read-cache.module.ts (Redis read cache that reproduces the old @Cacheable and @CacheEvict)
   modules/<domain>/  one Nest module per old domain; controller -> service -> repository; dto/
   infra/             prisma/ and redis/ (connection only; queries, key names and commands live with the caller, e.g. modules/user, modules/auth);
-                     (planned) storage, gemini, github
+                     storage/ (ImageStorage interface, key rules, in-memory fake for tests, an unconfigured default; the S3 adapter comes later);
+                     (planned) gemini, github
 apps/server/test/    tests that start an HTTP app (contract/, error/); support/ is the shared setup of the real-MySQL specs
                      and the fake Redis for service specs (fake-redis.ts)
 apps/server/contract/front-contract.json
