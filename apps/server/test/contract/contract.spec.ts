@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import type { INestApplication } from '@nestjs/common';
 import type {
   OpenAPIObject,
+  RequestBodyObject,
   ResponseObject,
   SchemaObject,
 } from '@nestjs/swagger';
@@ -15,7 +16,7 @@ const contract = JSON.parse(
   ),
 ) as Contract;
 
-// 시험 단계에서는 가짜 컨트롤러가 흉내 내는 작업과 실제로 옮긴 작업(reissue, logout, 글 목록 4개, 글 상세·인기·홈 피드·태그, 사용자·소개 11개, 내 댓글·좋아요 3개)만 비교한다.
+// 시험 단계에서는 가짜 컨트롤러가 흉내 내는 작업과 실제로 옮긴 작업(reissue, logout, 글 목록 4개, 글 상세·인기·홈 피드·태그, 사용자·소개 11개, 내 댓글·좋아요 3개, 이미지 3개)만 비교한다.
 // 실제 컨트롤러가 늘면 이 목록을 없애고 계약 전체와 비교한다.
 // 합격 기준: 비교 결과가 빈 목록이어야 한다. 데코레이터로 표현이 안 되면 생성된 문서를 후처리해도 되지만
 // 판정은 이 비교가 한다.
@@ -28,6 +29,9 @@ const TRIAL = {
     'completeProfile',
     'updateProfile',
     'approveUserProfile',
+    'uploadImage',
+    'updateProfileImage',
+    'deleteProfileImage',
     'getMyComments',
     'getMyLikes',
     'isPostLiked',
@@ -137,6 +141,31 @@ describe('OpenAPI 계약', () => {
       const problems = diffContract(contract, bad, TRIAL);
       expect(problems.join('\n')).toContain(
         'UserProfileRequest.position: 타입이 다르다',
+      );
+    });
+
+    // 파일 업로드: 프론트 계약은 본문 모델이 없는 폼(formParams)이다. 서버 명세가 JSON 본문을 같이 받거나 이름 있는 모델을 쓰면 다르다.
+    it('multipart 본문에 JSON 형식이 같이 있는 작업', () => {
+      const bad = structuredClone(doc);
+      const body = bad.paths['/api/v1/profile-images'].put!
+        .requestBody as RequestBodyObject;
+      body.content['application/json'] = { schema: { type: 'object' } };
+      const problems = diffContract(contract, bad, TRIAL);
+      expect(problems.join('\n')).toContain(
+        'updateProfileImage: 본문 형식 불일치',
+      );
+    });
+
+    it('multipart 본문이 이름 있는 모델을 가리키는 작업', () => {
+      const bad = structuredClone(doc);
+      const body = bad.paths['/api/v1/posts/images'].post!
+        .requestBody as RequestBodyObject;
+      body.content['multipart/form-data'].schema = {
+        $ref: '#/components/schemas/CommentRequest',
+      };
+      const problems = diffContract(contract, bad, TRIAL);
+      expect(problems.join('\n')).toContain(
+        'uploadImage: 요청 본문 모델 불일치',
       );
     });
 
